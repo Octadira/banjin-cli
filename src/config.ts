@@ -20,6 +20,7 @@ export interface AppState {
     pending_tool_call: any;
     configPath: string;
     mcp_servers: any;
+    loadedContextFiles: string[];
 }
 
 export function findConfigPath(): string | null {
@@ -91,6 +92,7 @@ export async function loadInitialState(): Promise<AppState | null> {
     try {
         const config = loadConfig(configPath);
         const mcp_servers = loadMcpServers(configPath);
+        const loadedContextFiles: string[] = [];
 
         // New combined context logic
         const globalContextPath = path.join(os.homedir(), '.banjin', 'context.md');
@@ -99,11 +101,13 @@ export async function loadInitialState(): Promise<AppState | null> {
         let globalContext = '';
         if (fs.existsSync(globalContextPath)) {
             globalContext = fs.readFileSync(globalContextPath, 'utf8');
+            loadedContextFiles.push(globalContextPath);
         }
 
         let localContext = '';
         if (fs.existsSync(localContextPath)) {
             localContext = fs.readFileSync(localContextPath, 'utf8');
+            loadedContextFiles.push(localContextPath);
         }
 
         const system_context = [globalContext, localContext].filter(c => c.trim() !== '').join('\n\n---\n\n');
@@ -118,6 +122,7 @@ export async function loadInitialState(): Promise<AppState | null> {
             pending_tool_call: null,
             configPath: configPath, // This still points to the primary config dir
             mcp_servers: mcp_servers,
+            loadedContextFiles: loadedContextFiles,
         };
         return initialState;
     } catch (e: any) {
