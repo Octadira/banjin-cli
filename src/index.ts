@@ -166,7 +166,9 @@ async function mainLoop() {
             } else if (input) {
                 state.conversation.push({ role: 'user', content: input });
                 
-                const spinner = ora('Waiting for LLM...\n' + chalk.dim('(press ESC to cancel)')).start();
+                const spinner = ora({ text: 'Waiting for LLM...', spinner: 'dots' });
+                spinner.info(chalk.dim('(press ESC to cancel)'));
+                spinner.start();
 
                 let keypressListener: ((str: string, key: any) => void) | undefined;
                 const cleanupListener = () => {
@@ -192,13 +194,18 @@ async function mainLoop() {
                         process.stdin.on('keypress', keypressListener);
                     });
 
-                    const response_message = await Promise.race([callLlmApi(state), cancelPromise]);
+                    const llmCall = callLlmApi(state, (status) => {
+                        spinner.text = chalk.yellow(status);
+                    });
+
+                    const response_message = await Promise.race([llmCall, cancelPromise]);
 
                     cleanupListener();
 
                     if (response_message === 'cancelled') {
                         spinner.fail('Cancelled by user.');
-                        state.conversation.pop(); // Remove the user message that was cancelled
+                        state.conversation.pop();
+                        await new Promise(resolve => setTimeout(resolve, 10)); // Small delay to allow TTY to settle
                         continue;
                     }
                     
