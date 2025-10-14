@@ -50,9 +50,11 @@ async function setupConfiguration(): Promise<string | null> {
 
             fs.copyFileSync(exampleConfigPath, path.join(globalPath, 'config.yaml'));
             fs.copyFileSync(exampleMcpPath, path.join(globalPath, 'mcp-servers.json'));
+            fs.writeFileSync(path.join(globalPath, 'context.md'), '# This is your global context file. Add any system-level instructions for the AI here.\n');
 
             console.log(chalk.green(`Successfully created configuration at ${globalPath}`));
             console.log(chalk.yellow.bold('IMPORTANT: Please open ~/.banjin/config.yaml and add your API key.'));
+            console.log(chalk.yellow('You can also add global instructions in ~/.banjin/context.md'));
             return globalPath;
         } catch (error: any) { 
             console.log(chalk.red(`Could not create configuration: ${error.message}`));
