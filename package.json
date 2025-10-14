@@ -29,7 +29,8 @@
   "files": [
     "dist",
     "config.example.yaml",
-    "mcp-servers.example.json"
+    "mcp-servers.example.json",
+    "context.md"
   ],
   "type": "commonjs",
   "dependencies": {

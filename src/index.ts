@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import inquirer from 'inquirer';
 import chalk from 'chalk';
+import * as fs from 'fs';
+import * as path from 'path';
 import { AppState, loadInitialState } from './config';
 import { handleSlashCommand } from './commands';
 import { callLlmApi } from './llm';
@@ -12,13 +14,47 @@ const pkg = require('../package.json');
 
 import ora from 'ora';
 
+async function checkContextUpdate(configPath: string) {
+    const userContextPath = path.join(configPath, 'context.md');
+    const templateContextPath = path.join(__dirname, '..', 'context.md');
+
+    if (!fs.existsSync(userContextPath) || !fs.existsSync(templateContextPath)) {
+        return;
+    }
+
+    const userContext = fs.readFileSync(userContextPath, 'utf8');
+    const templateContext = fs.readFileSync(templateContextPath, 'utf8');
+
+    if (userContext !== templateContext) {
+        const answers = await inquirer.prompt([
+            {
+                type: 'confirm',
+                name: 'updateContext',
+                message: 'Your global context.md differs from the latest template. Would you like to overwrite it? (Your local changes will be lost)',
+                default: false,
+            },
+        ]);
+
+        if (answers.updateContext) {
+            try {
+                fs.copyFileSync(templateContextPath, userContextPath);
+                console.log(chalk.green('Global context.md has been updated.'));
+            } catch (error: any) {
+                console.log(chalk.red(`Could not update context.md: ${error.message}`));
+            }
+        }
+    }
+}
+
 async function mainLoop() {
     updateNotifier({ pkg }).notify();
 
     const state: AppState | null = await loadInitialState();
     if (!state) return;
 
-    console.log(chalk.green.bold('Banjin AI Assistant [TS Version]. Use /help for commands.'));
+    await checkContextUpdate(state.configPath);
+
+    console.log(chalk.green.bold(`Banjin AI Assistant [TS Version v${pkg.version}]. Use /help for commands.`));
     console.log(chalk.dim(`Context loaded from: ${state.configPath}`));
 
     while (true) {
