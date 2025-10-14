@@ -20,6 +20,9 @@ yarn-error.log*
 # Local chat files
 chat_*.md
 
+# Conversation logs
+conversation_log_*.md
+
 # Gemini CLI
 GEMINI.md
 
