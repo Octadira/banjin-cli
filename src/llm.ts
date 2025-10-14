@@ -7,7 +7,7 @@ const MAX_HISTORY_MESSAGES = 10;
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 40000; // 40 seconds
 
-export async function callLlmApi(state: AppState): Promise<any | null> {
+export async function callLlmApi(state: AppState, onStatusUpdate?: (message: string) => void): Promise<any | null> {
     const { baseUrl: api_base, model, temperature, apiKey } = state.session_config.llm;
     const endpoint = `${api_base}/chat/completions`;
 
@@ -40,19 +40,20 @@ export async function callLlmApi(state: AppState): Promise<any | null> {
             return response_message;
         } catch (error: any) {
             if (axios.isAxiosError(error) && error.response && error.response.status === 429) {
-                console.log(chalk.yellow(`Rate limit hit. Retrying in ${current_backoff_ms / 1000} seconds...`));
+                const retryMessage = `Rate limit hit. Retrying in ${current_backoff_ms / 1000} seconds...`;
+                if (onStatusUpdate) {
+                    onStatusUpdate(retryMessage);
+                }
                 await new Promise(resolve => setTimeout(resolve, current_backoff_ms));
                 current_backoff_ms *= 2; // Exponential backoff
                 retries_left--;
             } else {
-                // Other errors, not rate limit
                 return {
                     content: `Error calling LLM: ${error.message}`
                 };
             }
         }
     }
-    // If all retries fail
     return {
         content: `Error calling LLM: Max retries exceeded due to rate limiting.`
     };
