@@ -4,16 +4,33 @@ Banjin is a CLI AI assistant that helps you with your daily tasks.
 
 ## Installation
 
-### Global Installation
+### For End-Users (Recommended)
+
+To install and use the application, run the following command:
 
 ```bash
-npm install -g ./banjin
+npm install -g banjin
 ```
 
-### Local Installation
+### For Developers (from Source)
+
+If you want to contribute to the project, you can install it from the source code:
 
 ```bash
+# 1. Clone the repository
+git clone https://github.com/your-username/banjin.git
+
+# 2. Navigate to the project directory
+cd banjin
+
+# 3. Install dependencies
 npm install
+
+# 4. To run the app locally for development
+npm start
+
+# 5. (Optional) To test the global command from your local code
+npm install -g .
 ```
 
 ## Usage
