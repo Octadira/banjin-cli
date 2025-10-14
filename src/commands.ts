@@ -1,16 +1,20 @@
 import { AppState, loadMcpServers, findConfigPath } from './config';
+import { forceCheckForUpdate } from './update';
 import chalk from 'chalk';
 import * as fs from 'fs';
-import * as glob from 'glob';
 import * as os from 'os';
 import * as path from 'path';
 import { Client } from 'ssh2';
 
-// This is a placeholder for a real password prompt
-const getPassword = (prompt: string) => {
-    // In a real TUI, this would be an async prompt that doesn't block the main loop.
-    // For a simple REPL, this is acceptable but blocks.
-    return require('readline-sync').question(prompt, { hideEchoBack: true });
+import * as readlineSync from 'readline-sync';
+
+const getPassword = (prompt: string): string => {
+    try {
+        return readlineSync.question(prompt, { hideEchoBack: true });
+    } catch (error) {
+        console.error(chalk.red('Error reading password input'));
+        return '';
+    }
 }
 
 export async function handleSlashCommand(state: AppState, input: string): Promise<boolean> {
@@ -21,7 +25,7 @@ export async function handleSlashCommand(state: AppState, input: string): Promis
     switch (command) {
         case '/exit':
             if (state.ssh.client) state.ssh.client.end();
-            return true; // Signal to exit
+            return true;
 
         case '/help':
             console.log(chalk.yellow(`
@@ -30,10 +34,10 @@ Available Commands:
   Chat & Context:
   /context             - Display the current system context
   /resetchat           - Reset the current conversation memory
-  /savechat            - Save the conversation to a file in the current project directory
-  /loadchat <filename> - Load a conversation from a file in the current project directory
-  /chats-list          - List saved chat files in the current project directory
-  /chats-delete <file> - Delete a saved chat file from the current project directory
+  /savechat            - Save the conversation to a file
+  /loadchat <filename> - Load a conversation from a file
+  /chats-list          - List saved chat files
+  /chats-delete <file> - Delete a saved chat file
 
   LLM & Model:
   /model <model_name>  - Change the LLM model for this session
@@ -43,9 +47,9 @@ Available Commands:
 
   Connections & Files:
   /status              - Show current SSH connection status
-  /connect <user@host> - Connect to a remote server via SSH [-i <key_path> | -p <pem_path>]
+  /connect <user@host> - Connect to a remote server via SSH
   /disconnect          - Disconnect from the remote server
-  /ls-files [path]     - List files and directories in the specified path
+  /ls-files [path]     - List files and directories
 
   MCP Tools:
   /mcp-list            - List available MCP servers
@@ -54,6 +58,7 @@ Available Commands:
   General:
   /help                - Show this help message
   /clear               - Clear the screen
+  /update              - Check for application updates
 `));
             break;
 
@@ -185,21 +190,37 @@ Available Commands:
                 console.log(chalk.red('Could not find .banjin configuration directory.'));
             }
             break;
+        
+        case '/update':
+            const update = await forceCheckForUpdate();
+            if (update) {
+                console.log(chalk.yellow(`A new version is available!`));
+                console.log(`Current version: ${update.current}`);
+                console.log(`Latest version: ${update.latest}`);
+                console.log(chalk.cyan(`\nRun the following command to update:\nnpm install -g ${update.name}@latest`));
+            } else {
+                console.log(chalk.green('You are already using the latest version.'));
+            }
+            break;
 
         default:
             console.log(chalk.red(`Unknown command: ${command}`));
             break;
     }
 
-    return false; // Continue loop
+    return false;
 }
 
 // --- Helper Functions for Commands ---
 
 async function connectSsh(state: AppState, args: string[]) {
     const hostString = args[0];
-    let keyFilename: string | undefined;
+    if (!hostString.includes('@')) {
+        console.log(chalk.red('Invalid host string. Format should be user@hostname'));
+        return;
+    }
 
+    let keyFilename: string | undefined;
     const iIndex = args.indexOf('-i');
     const pIndex = args.indexOf('-p');
 
@@ -259,11 +280,7 @@ async function connectSsh(state: AppState, args: string[]) {
 
     if (privateKey) {
         connectionOptions.privateKey = privateKey;
-        // The 'keyboard-interactive' event will handle the passphrase if the server asks for it.
-        // We can also try to get it directly if we know the key is encrypted.
-        // For simplicity, we rely on the server prompt.
     } else {
-        // Fallback to password if no key is found/provided
         connectionOptions.password = getPassword(`Password for ${hostString}: `);
     }
 
@@ -320,16 +337,15 @@ function loadChatFromFile(state: AppState, filename: string) {
         for (const section of sections) {
             const lines = section.split('\n');
             const role = lines[0].trim().toLowerCase();
-            const content = lines.slice(2).join('\n').trim();
+            let content = lines.slice(2).join('\n').trim();
 
             if (role === 'system') {
-                // Assuming the system message is the first one and already in the state
                 continue;
             }
 
             if (content.startsWith('```json')) {
-                const jsonContent = content.substring(7, content.length - 3);
-                newConversation.push({ role: role, tool_calls: JSON.parse(jsonContent) });
+                content = content.substring(7, content.length - 3);
+                newConversation.push({ role: role, tool_calls: JSON.parse(content) });
             } else {
                 newConversation.push({ role: role, content: content });
             }
@@ -338,8 +354,9 @@ function loadChatFromFile(state: AppState, filename: string) {
         state.conversation = [state.conversation[0], ...newConversation];
         console.log(chalk.green(`Conversation loaded from ${filename}`));
 
-    } catch (error: any) {
-        console.log(chalk.red(`Error loading chat: ${error.message}`));
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        console.log(chalk.red(`Error loading chat: ${errorMessage}`));
     }
 }
 
@@ -384,12 +401,25 @@ function deleteChatFile(filename: string) {
 
 function listLocalFiles(targetPath: string) {
     try {
-        const files = fs.readdirSync(targetPath, { withFileTypes: true });
+        const resolvedPath = path.resolve(targetPath);
+        if (!fs.existsSync(resolvedPath)) {
+            console.log(chalk.red(`Path does not exist: ${targetPath}`));
+            return;
+        }
+
+        const stats = fs.statSync(resolvedPath);
+        if (!stats.isDirectory()) {
+            console.log(chalk.red(`Path is not a directory: ${targetPath}`));
+            return;
+        }
+
+        const files = fs.readdirSync(resolvedPath, { withFileTypes: true });
         const output = files.map(dirent => {
             return dirent.isDirectory() ? chalk.blue(dirent.name + '/') : dirent.name;
         }).join('\n');
-        console.log(output);
-    } catch (error: any) {
-        console.log(chalk.red(`Error listing files: ${error.message}`));
+        console.log(output || chalk.yellow('(empty directory)'));
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        console.log(chalk.red(`Error listing files: ${errorMessage}`));
     }
 }
