@@ -46,6 +46,21 @@ async function checkContextUpdate(configPath: string) {
     }
 }
 
+function displayUsageSummary(state: AppState) {
+    const contextFilesCount = state.loadedContextFiles.length;
+    const mcpServersCount = state.mcp_servers?.mcpServers ? Object.keys(state.mcp_servers.mcpServers).length : 0;
+
+    if (contextFilesCount > 0 || mcpServersCount > 0) {
+        console.log(chalk.dim('Using:'));
+        if (contextFilesCount > 0) {
+            console.log(chalk.dim(`  - ${contextFilesCount} context.md file(s)`));
+        }
+        if (mcpServersCount > 0) {
+            console.log(chalk.dim(`  - ${mcpServersCount} MCP server(s)`));
+        }
+    }
+}
+
 async function mainLoop() {
     updateNotifier({ pkg }).notify();
 
@@ -56,6 +71,8 @@ async function mainLoop() {
 
     console.log(chalk.green.bold(`Banjin AI Assistant [TS Version v${pkg.version}]. Use /help for commands.`));
     console.log(chalk.dim(`Context loaded from: ${state.configPath}`));
+    
+    displayUsageSummary(state);
 
     while (true) {
         try {
