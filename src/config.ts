@@ -100,7 +100,7 @@ export async function loadInitialState(): Promise<AppState | null> {
         const loadedContextFiles: string[] = [];
 
         const globalContextPath = path.join(os.homedir(), '.banjin', 'context.md');
-        const localContextPath = path.join(process.cwd(), '.banjin', 'context.md');
+        const localContextPath = path.join(process.cwd(), 'context.md');
 
         let globalContext = '';
         if (fs.existsSync(globalContextPath)) {
