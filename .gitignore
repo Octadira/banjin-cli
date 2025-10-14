@@ -26,8 +26,3 @@ conversation_log_*.md
 # Gemini CLI
 GEMINI.md
 
-# Python cache
-__pycache__/
-
-# Python egg info
-banjin.egg-info/
