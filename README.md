@@ -49,9 +49,17 @@ npm start
 
 ## Configuration
 
-1.  Copy `config.example.yaml` to `.banjin/config.yaml`.
-2.  Copy `mcp-servers.example.json` to `.banjin/mcp-servers.json`.
-3.  Fill in your API key in `.banjin/config.yaml`.
+On the first run, Banjin will automatically prompt you to create a global configuration directory at `~/.banjin`.
+
+This directory will be populated with the following files:
+
+- `config.yaml`: The main configuration file. You **must** edit this file to add your LLM API key.
+- `mcp-servers.json`: Configuration for MCP tools.
+- `context.md`: A file for your global system context and instructions for the AI. You are encouraged to edit this file to customize the AI's behavior.
+
+### Context File Updates
+
+The `context.md` file that is created for you is based on a template from the application. If you update the application and the developers have provided an updated template, Banjin will detect this and ask you if you want to overwrite your local file with the new version. This allows you to get the latest improvements while still giving you control over your personal configuration.
 
 ## Commands
 
