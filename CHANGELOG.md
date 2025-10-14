@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.5] - 2025-10-14
+
+### Changed
+- Updated README.md with a list of compatible LLM models for tool use.
+
+## [1.3.4] - 2025-10-14
+
+### Fixed
+- Applied manual bug fixes from user.
+
+## [1.3.3] - 2025-10-14
+
+### Fixed
+- Improved the `/update` command to be interactive and fix terminal state issues after cancellation.
+
+## [1.3.2] - 2025-10-14
+
+### Fixed
+- Corrected local context.md file detection to look directly in the current working directory.
+
+## [1.3.1] - 2025-10-14
+
+### Fixed
+- Created `context.md` during initial setup.
+
 ## [1.3.0] - 2025-10-14
 
 ### Added

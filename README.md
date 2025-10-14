@@ -33,20 +33,6 @@ npm start
 npm install -g .
 ```
 
-## Usage
-
-### Global
-
-```bash
-banjin
-```
-
-### Local
-
-```bash
-npm start
-```
-
 ## Configuration
 
 On the first run, Banjin will automatically prompt you to create a global configuration directory at `~/.banjin`.
@@ -60,6 +46,22 @@ This directory will be populated with the following files:
 ### Context File Updates
 
 The `context.md` file that is created for you is based on a template from the application. If you update the application and the developers have provided an updated template, Banjin will detect this and ask you if you want to overwrite your local file with the new version. This allows you to get the latest improvements while still giving you control over your personal configuration.
+
+## Compatible Models
+
+*(Information last updated: 2025-10-14)*
+
+This application requires a model that supports **Tool Use** (also known as Function Calling). Below is a list of models available via Groq that are reported to be compatible.
+
+**Recommended by Groq for Tool Use:**
+- `llama-3.1-8b-instant`
+- `llama-3.3-70b-versatile`
+
+**Other Compatible Models:**
+- `meta-llama/llama-4-maverick-17b-128e-instruct`
+- `moonshotai/kimi-k2-instruct`
+- `qwen/qwen3-32b`
+- `openai/gpt-oss-120b`
 
 ## Commands
 
