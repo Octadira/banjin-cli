@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "fetch": {
+      "url": "https://remote.mcpservers.org/fetch/mcp"
+    },
+    "context7": {
+      "url": "https://mcp.context7.com/mcp"
+    },
+    "ddg-search": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@oevortex/ddg_search@latest"
+      ]
+    },
+    "deepwiki": {
+      "url": "https://mcp.deepwiki.com/mcp"
+    }
+  }
+}

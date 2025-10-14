@@ -1,0 +1,30 @@
+# Dependencies
+/node_modules
+
+# Build output
+/dist
+
+# macOS
+.DS_Store
+
+# Configuration
+config.yaml
+mcp-servers.json
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local chat files
+chat_*.md
+
+# Gemini CLI
+GEMINI.md
+
+# Python cache
+__pycache__/
+
+# Python egg info
+banjin.egg-info/
