@@ -3,26 +3,29 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { AppState, loadInitialState } from './config';
 import { handleSlashCommand } from './commands';
 import { callLlmApi } from './llm';
 import { available_tools } from './tools';
-import updateNotifier from 'update-notifier';
+import { notifyOnUpdate } from './update';
 const pkg = require('../package.json');
-
-
 
 import ora from 'ora';
 
-async function checkContextUpdate(configPath: string) {
-    const userContextPath = path.join(configPath, 'context.md');
-    const templateContextPath = path.join(__dirname, '..', 'context.md');
-
-    if (!fs.existsSync(userContextPath) || !fs.existsSync(templateContextPath)) {
+async function checkContextUpdate(state: AppState) {
+    const globalContextPath = path.join(os.homedir(), '.banjin', 'context.md');
+    if (state.configPath !== path.dirname(globalContextPath)) {
         return;
     }
 
-    const userContext = fs.readFileSync(userContextPath, 'utf8');
+    const templateContextPath = path.join(__dirname, '..', 'context.md');
+
+    if (!fs.existsSync(globalContextPath) || !fs.existsSync(templateContextPath)) {
+        return;
+    }
+
+    const userContext = fs.readFileSync(globalContextPath, 'utf8');
     const templateContext = fs.readFileSync(templateContextPath, 'utf8');
 
     if (userContext !== templateContext) {
@@ -37,8 +40,9 @@ async function checkContextUpdate(configPath: string) {
 
         if (answers.updateContext) {
             try {
-                fs.copyFileSync(templateContextPath, userContextPath);
-                console.log(chalk.green('Global context.md has been updated.'));
+                fs.copyFileSync(templateContextPath, globalContextPath);
+                console.log(chalk.green('Global context.md has been updated. Please restart the application to see the changes.'));
+                process.exit(0);
             } catch (error: any) {
                 console.log(chalk.red(`Could not update context.md: ${error.message}`));
             }
@@ -62,12 +66,12 @@ function displayUsageSummary(state: AppState) {
 }
 
 async function mainLoop() {
-    updateNotifier({ pkg }).notify();
+    notifyOnUpdate();
 
     const state: AppState | null = await loadInitialState();
     if (!state) return;
 
-    await checkContextUpdate(state.configPath);
+    await checkContextUpdate(state);
 
     console.log(chalk.green.bold(`Banjin AI Assistant [TS Version v${pkg.version}]. Use /help for commands.`));
     console.log(chalk.dim(`Context loaded from: ${state.configPath}`));
@@ -106,25 +110,25 @@ async function mainLoop() {
                     console.log(chalk.dim('User approved. Executing tool...'));
                     const function_name = tool_call.function.name;
                     const function_args = JSON.parse(tool_call.function.arguments);
-                                        const function_to_call = available_tools[function_name];
+                    const function_to_call = available_tools[function_name];
                     
-                                        if (function_to_call) {
-                                            const spinner = ora(`Executing tool: ${function_name}...`).start();
-                                            const tool_response = await function_to_call(state, function_args);
-                                            spinner.succeed();
+                    if (function_to_call) {
+                        const spinner = ora(`Executing tool: ${function_name}...`).start();
+                        const tool_response = await function_to_call(state, function_args);
+                        spinner.succeed();
                     
-                                            state.conversation.push({
-                                                role: 'tool',
-                                                tool_call_id: tool_call.id,
-                                                name: function_name,
-                                                content: tool_response,
-                                            });
+                        state.conversation.push({
+                            role: 'tool',
+                            tool_call_id: tool_call.id,
+                            name: function_name,
+                            content: tool_response,
+                        });
                     
-                                            const llmSpinner = ora('Waiting for LLM...').start();
-                                            const post_tool_llm_response = await callLlmApi(state);
-                                            llmSpinner.stop();
+                        const llmSpinner = ora('Waiting for LLM...').start();
+                        const post_tool_llm_response = await callLlmApi(state);
+                        llmSpinner.stop();
                     
-                                            if (post_tool_llm_response) {
+                        if (post_tool_llm_response) {
                             if (post_tool_llm_response.tool_calls && post_tool_llm_response.tool_calls.length > 0) {
                                 const next_tool_call = post_tool_llm_response.tool_calls[0];
                                 state.is_confirming = true;
@@ -150,7 +154,6 @@ async function mainLoop() {
                         name: tool_call.function.name,
                         content: 'User denied execution.',
                     });
-                    // Inform LLM of denial and get a new response
                     const denial_response = await callLlmApi(state);
                     if (denial_response && denial_response.content) {
                         console.log(chalk.green('Banjin: ') + denial_response.content);
@@ -159,13 +162,13 @@ async function mainLoop() {
             } else if (input.startsWith('/')) {
                 const shouldExit = await handleSlashCommand(state, input);
                 if (shouldExit) break;
-                        } else if (input) {
-                            state.conversation.push({ role: 'user', content: input });
-                            const spinner = ora('Waiting for LLM...').start();
-                            const response_message = await callLlmApi(state);
-                            spinner.stop();
+            } else if (input) {
+                state.conversation.push({ role: 'user', content: input });
+                const spinner = ora('Waiting for LLM...').start();
+                const response_message = await callLlmApi(state);
+                spinner.stop();
             
-                            if (response_message) {
+                if (response_message) {
                     if (response_message.tool_calls && response_message.tool_calls.length > 0) {
                         const tool_call = response_message.tool_calls[0];
                         state.is_confirming = true;

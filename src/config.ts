@@ -46,13 +46,16 @@ async function setupConfiguration(): Promise<string | null> {
         const globalPath = path.join(os.homedir(), '.banjin');
         try {
             fs.mkdirSync(globalPath, { recursive: true });
+            
             const exampleConfigPath = path.join(__dirname, '..', 'config.example.yaml');
             const exampleMcpPath = path.join(__dirname, '..', 'mcp-servers.example.json');
             const contextTemplatePath = path.join(__dirname, '..', 'context.md');
 
             fs.copyFileSync(exampleConfigPath, path.join(globalPath, 'config.yaml'));
             fs.copyFileSync(exampleMcpPath, path.join(globalPath, 'mcp-servers.json'));
-            fs.copyFileSync(contextTemplatePath, path.join(globalPath, 'context.md'));
+            if (fs.existsSync(contextTemplatePath)) {
+                fs.copyFileSync(contextTemplatePath, path.join(globalPath, 'context.md'));
+            }
 
             console.log(chalk.green(`Successfully created configuration at ${globalPath}`));
             console.log(chalk.yellow.bold('IMPORTANT: Please open ~/.banjin/config.yaml and add your API key.'));
@@ -70,7 +73,9 @@ async function setupConfiguration(): Promise<string | null> {
 
 function loadConfig(configPath: string): any {
     const configFile = path.join(configPath, 'config.yaml');
-    if (!fs.existsSync(configFile)) throw new Error(`Config file not found: ${configFile}`);
+    if (!fs.existsSync(configFile)) {
+        throw new Error(`Config file not found: ${configFile}. Please ensure it exists or run setup again.`);
+    }
     return yaml.parse(fs.readFileSync(configFile, 'utf8'));
 }
 
@@ -94,7 +99,6 @@ export async function loadInitialState(): Promise<AppState | null> {
         const mcp_servers = loadMcpServers(configPath);
         const loadedContextFiles: string[] = [];
 
-        // New combined context logic
         const globalContextPath = path.join(os.homedir(), '.banjin', 'context.md');
         const localContextPath = path.join(process.cwd(), '.banjin', 'context.md');
 
@@ -105,7 +109,7 @@ export async function loadInitialState(): Promise<AppState | null> {
         }
 
         let localContext = '';
-        if (fs.existsSync(localContextPath)) {
+        if (fs.existsSync(localContextPath) && globalContextPath !== localContextPath) {
             localContext = fs.readFileSync(localContextPath, 'utf8');
             loadedContextFiles.push(localContextPath);
         }
@@ -120,13 +124,14 @@ export async function loadInitialState(): Promise<AppState | null> {
             ssh: { client: null, host_string: null },
             is_confirming: false,
             pending_tool_call: null,
-            configPath: configPath, // This still points to the primary config dir
+            configPath: configPath,
             mcp_servers: mcp_servers,
             loadedContextFiles: loadedContextFiles,
         };
         return initialState;
     } catch (e: any) {
         console.log(chalk.red.bold(`Error loading configuration: ${e.message}`));
+        console.log(chalk.yellow('Please check your configuration files or run setup again.'));
         return null;
     }
 }
