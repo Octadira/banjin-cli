@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as yaml from 'yaml';
 import chalk from 'chalk';
+import inquirer from 'inquirer';
 
 export interface SSHState {
     client: any; // ssh2 client
@@ -29,6 +30,40 @@ export function findConfigPath(): string | null {
     return null;
 }
 
+async function setupConfiguration(): Promise<string | null> {
+    console.log(chalk.yellow('Welcome to Banjin! It looks like this is your first time.'));
+    const answers = await inquirer.prompt([
+        {
+            type: 'confirm',
+            name: 'createConfig',
+            message: 'No configuration directory found. Would you like to create one at ~/.banjin?',
+            default: true,
+        },
+    ]);
+
+    if (answers.createConfig) {
+        const globalPath = path.join(os.homedir(), '.banjin');
+        try {
+            fs.mkdirSync(globalPath, { recursive: true });
+            const exampleConfigPath = path.join(__dirname, '..', 'config.example.yaml');
+            const exampleMcpPath = path.join(__dirname, '..', 'mcp-servers.example.json');
+
+            fs.copyFileSync(exampleConfigPath, path.join(globalPath, 'config.yaml'));
+            fs.copyFileSync(exampleMcpPath, path.join(globalPath, 'mcp-servers.json'));
+
+            console.log(chalk.green(`Successfully created configuration at ${globalPath}`));
+            console.log(chalk.yellow.bold('IMPORTANT: Please open ~/.banjin/config.yaml and add your API key.'));
+            return globalPath;
+        } catch (error: any) { 
+            console.log(chalk.red(`Could not create configuration: ${error.message}`));
+            return null;
+        }
+    } else {
+        console.log(chalk.yellow('Configuration setup cancelled.'));
+        return null;
+    }
+}
+
 function loadConfig(configPath: string): any {
     const configFile = path.join(configPath, 'config.yaml');
     if (!fs.existsSync(configFile)) throw new Error(`Config file not found: ${configFile}`);
@@ -42,10 +77,12 @@ export function loadMcpServers(configPath: string): any {
 }
 
 export async function loadInitialState(): Promise<AppState | null> {
-    const configPath = findConfigPath();
+    let configPath = findConfigPath();
     if (!configPath) {
-        console.log(chalk.red.bold('Error: No .banjin configuration directory found.'));
-        return null;
+        configPath = await setupConfiguration();
+        if (!configPath) {
+            return null;
+        }
     }
 
     try {
