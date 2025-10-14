@@ -4,6 +4,7 @@ import chalk from 'chalk';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as readline from 'readline';
 import { AppState, loadInitialState } from './config';
 import { handleSlashCommand } from './commands';
 import { callLlmApi } from './llm';
@@ -124,7 +125,7 @@ async function mainLoop() {
                             content: tool_response,
                         });
                     
-                        const llmSpinner = ora('Waiting for LLM...').start();
+                        const llmSpinner = ora('Waiting for LLM... (press ESC to cancel)').start();
                         const post_tool_llm_response = await callLlmApi(state);
                         llmSpinner.stop();
                     
@@ -164,25 +165,65 @@ async function mainLoop() {
                 if (shouldExit) break;
             } else if (input) {
                 state.conversation.push({ role: 'user', content: input });
-                const spinner = ora('Waiting for LLM...').start();
-                const response_message = await callLlmApi(state);
-                spinner.stop();
-            
-                if (response_message) {
-                    if (response_message.tool_calls && response_message.tool_calls.length > 0) {
-                        const tool_call = response_message.tool_calls[0];
-                        state.is_confirming = true;
-                        state.pending_tool_call = tool_call;
-                        const tool_name = tool_call.function.name;
-                        const tool_args = tool_call.function.arguments;
-                        
-                        console.log(chalk.yellow('LLM wants to run tool:'));
-                        console.log(chalk.bold.cyan(tool_name));
-                        console.log(chalk.dim(tool_args));
+                
+                const spinner = ora('Waiting for LLM...\n' + chalk.dim('(press ESC to cancel)')).start();
 
-                    } else if (response_message.content) {
-                        console.log(chalk.green('Banjin: ') + response_message.content);
+                let keypressListener: ((str: string, key: any) => void) | undefined;
+                const cleanupListener = () => {
+                    if (keypressListener) {
+                        process.stdin.removeListener('keypress', keypressListener);
                     }
+                    if (process.stdin.isTTY) {
+                        process.stdin.setRawMode(false);
+                    }
+                };
+
+                try {
+                    const cancelPromise = new Promise(resolve => {
+                        readline.emitKeypressEvents(process.stdin);
+                        if (process.stdin.isTTY) {
+                            process.stdin.setRawMode(true);
+                        }
+                        keypressListener = (str, key) => {
+                            if (key.name === 'escape') {
+                                resolve('cancelled');
+                            }
+                        };
+                        process.stdin.on('keypress', keypressListener);
+                    });
+
+                    const response_message = await Promise.race([callLlmApi(state), cancelPromise]);
+
+                    cleanupListener();
+
+                    if (response_message === 'cancelled') {
+                        spinner.fail('Cancelled by user.');
+                        state.conversation.pop(); // Remove the user message that was cancelled
+                        continue;
+                    }
+                    
+                    spinner.succeed('LLM response received.');
+
+                    if (response_message) {
+                        if (response_message.tool_calls && response_message.tool_calls.length > 0) {
+                            const tool_call = response_message.tool_calls[0];
+                            state.is_confirming = true;
+                            state.pending_tool_call = tool_call;
+                            const tool_name = tool_call.function.name;
+                            const tool_args = tool_call.function.arguments;
+                            
+                            console.log(chalk.yellow('LLM wants to run tool:'));
+                            console.log(chalk.bold.cyan(tool_name));
+                            console.log(chalk.dim(tool_args));
+
+                        } else if (response_message.content) {
+                            console.log(chalk.green('Banjin: ') + response_message.content);
+                        }
+                    }
+                } catch (e) {
+                    cleanupListener();
+                    spinner.fail('An error occurred.');
+                    console.error(e);
                 }
             }
         } catch (error: any) {
