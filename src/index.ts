@@ -162,7 +162,20 @@ async function mainLoop() {
                 }
             } else if (input.startsWith('/')) {
                 const shouldExit = await handleSlashCommand(state, input);
-                if (shouldExit) break;
+                if (shouldExit) {
+                    console.log(chalk.yellow('\nGoodbye!'));
+                    break;
+                }
+            } else if (input.startsWith('.')) {
+                // Support dot-prefixed local commands (e.g. .exit) that won't be sent to the LLM.
+                // Map ".<cmd>" to "/<cmd>" and reuse existing slash-command handler.
+                const mapped = '/' + input.slice(1).trim();
+                const shouldExit = await handleSlashCommand(state, mapped);
+                if (shouldExit) {
+                    // Print a friendly message when exiting via local dot-command
+                    console.log(chalk.yellow('\nGoodbye!'));
+                    break;
+                }
             } else if (input) {
                 state.conversation.push({ role: 'user', content: input });
                 
