@@ -28,3 +28,6 @@ GEMINI.md
 
 # Banjin local config and cache
 /.banjin/
+
+# Private roadmap
+roadmap.dev.md
