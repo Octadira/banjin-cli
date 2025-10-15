@@ -70,3 +70,59 @@ tmpfs           788M  1.7M  786M   1% /run
         expect(result).toBe(errorMessage);
     });
 });
+
+describe('get_running_processes', () => {
+    const mockState: AppState = {
+        ssh: { client: null, host_string: null },
+    } as AppState;
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    it('should parse valid ps aux output correctly without a filter', async () => {
+        const mockPsOutput = `
+USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root           1  0.0  0.1 169592 11364 ?        Ss   Oct14   0:01 /sbin/init
+node        1234  0.5  0.2 899292 85416 ?        Sl   10:30   0:05 /usr/bin/node /app/index.js
+        `.trim();
+
+        const runCommandSpy = jest.spyOn(tools, 'run_command').mockResolvedValue(mockPsOutput);
+
+        const result = await tools.get_running_processes(mockState, {});
+        const parsedResult = JSON.parse(result);
+
+        expect(runCommandSpy).toHaveBeenCalledWith(mockState, { cmd: ['ps', 'aux'] });
+        expect(parsedResult).toHaveLength(2);
+        expect(parsedResult[1]).toEqual({
+            user: 'node',
+            pid: '1234',
+            cpu_percent: '0.5',
+            mem_percent: '0.2',
+            vsz: '899292',
+            rss: '85416',
+            tty: '?',
+            stat: 'Sl',
+            start: '10:30',
+            time: '0:05',
+            command: '/usr/bin/node /app/index.js',
+        });
+    });
+
+    it('should call grep when a filter is provided and filter out the grep process', async () => {
+        const mockPsOutput = `
+USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+node        1234  0.5  0.2 899292 85416 ?        Sl   10:30   0:05 /usr/bin/node /app/index.js
+user        5678  0.0  0.0  12345  1024 pts/0    S+   11:00   0:00 grep node
+        `.trim();
+
+        const runCommandSpy = jest.spyOn(tools, 'run_command').mockResolvedValue(mockPsOutput);
+
+        const result = await tools.get_running_processes(mockState, { filter: 'node' });
+        const parsedResult = JSON.parse(result);
+
+        expect(runCommandSpy).toHaveBeenCalledWith(mockState, { cmd: ['sh', '-c', 'ps aux | grep node'] });
+        expect(parsedResult).toHaveLength(1); // The grep process should be filtered out
+        expect(parsedResult[0].pid).toBe('1234');
+    });
+});
