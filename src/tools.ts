@@ -30,6 +30,17 @@ interface ProcessInfo {
     command: string;
 }
 
+// Interface for the structured output of get_service_status
+interface ServiceStatusInfo {
+    service: string;
+    description?: string;
+    is_loaded: boolean;
+    is_enabled?: boolean;
+    status: 'active' | 'inactive' | 'failed' | 'unknown';
+    status_details?: string;
+    main_pid?: string;
+}
+
 export function getToolDefinitions() {
     const core_tools = [
         {
@@ -100,6 +111,23 @@ export function getToolDefinitions() {
                             description: "Optional. A string to filter the process list by. Only processes matching the string will be returned."
                         }
                     },
+                },
+            },
+        },
+        {
+            type: "function",
+            function: {
+                name: "get_service_status",
+                description: "Retrieves the status of a systemd service (e.g., 'nginx', 'docker'). Returns a JSON object with details about the service's state.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        service_name: {
+                            type: "string",
+                            description: "The name of the systemd service to inspect."
+                        }
+                    },
+                    required: ["service_name"],
                 },
             },
         },
@@ -225,8 +253,7 @@ export async function read_file(state: AppState, args: { file_path: string }): P
                     sftp.readFile(file_path, 'utf8', (readErr: Error | null | undefined, data: string | Buffer) => {
                         if (readErr) {
                             resolve(`Error reading remote file: ${readErr.message}`);
-                        }
-                        else {
+                        } else {
                             resolve(`Content of file '${file_path}':\n${data.toString()}`);
                         }
                     });
@@ -343,6 +370,63 @@ export async function get_running_processes(state: AppState, args: { filter?: st
     }
 }
 
+export async function get_service_status(state: AppState, args: { service_name: string }): Promise<string> {
+    if (!args.service_name) {
+        return "Error: service_name parameter is required.";
+    }
+    try {
+        // We add `|| true` to the shell command to prevent it from returning a non-zero exit code if the service is not found,
+        // allowing us to parse the "Unit could not be found" message.
+        const command = ['sh', '-c', `systemctl status ${args.service_name} || true`];
+        const statusOutput = await exports.run_command(state, { cmd: command });
+
+        if (statusOutput.includes("command not found")) {
+            return JSON.stringify({ service: args.service_name, status: 'unknown', status_details: 'systemctl command not found. This may not be a systemd-based OS.' });
+        }
+        if (statusOutput.includes("Unit") && statusOutput.includes("could not be found")) {
+            return JSON.stringify({ service: args.service_name, status: 'unknown', status_details: `Service '${args.service_name}' not found.` });
+        }
+
+        const result: ServiceStatusInfo = {
+            service: args.service_name,
+            is_loaded: false,
+            status: 'unknown',
+        };
+
+        const loadedMatch = statusOutput.match(/Loaded: (\w+)/);
+        if (loadedMatch) {
+            result.is_loaded = loadedMatch[1] === 'loaded';
+        }
+
+        const enabledMatch = statusOutput.match(/; (enabled|disabled|static);/);
+        if (enabledMatch) {
+            result.is_enabled = enabledMatch[1] === 'enabled';
+        }
+
+        const activeMatch = statusOutput.match(/Active: (\w+) \((.*?)\)/);
+        if (activeMatch) {
+            const status = activeMatch[1];
+            if (status === 'active' || status === 'inactive' || status === 'failed') {
+                result.status = status;
+            }
+            result.status_details = activeMatch[2];
+        }
+        
+        const pidMatch = statusOutput.match(/Main PID: (\d+)/);
+        if (pidMatch) {
+            result.main_pid = pidMatch[1];
+        }
+
+        const descriptionMatch = statusOutput.match(/● .+? - (.*)/);
+        if (descriptionMatch) {
+            result.description = descriptionMatch[1].trim();
+        }
+
+        return JSON.stringify(result, null, 2);
+    } catch (error: any) {
+        return `Error getting service status: ${error.message}`;
+    }
+}
 
 const core_tools: { [key: string]: (state: AppState, args: any) => Promise<string> } = {
     run_command,
@@ -350,6 +434,7 @@ const core_tools: { [key: string]: (state: AppState, args: any) => Promise<strin
     read_file,
     get_disk_usage,
     get_running_processes,
+    get_service_status,
 };
 
 export const available_tools: { [key:string]: (state: AppState, args: any) => Promise<string> } = {

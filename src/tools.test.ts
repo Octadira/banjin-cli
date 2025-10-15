@@ -126,3 +126,73 @@ user        5678  0.0  0.0  12345  1024 pts/0    S+   11:00   0:00 grep node
         expect(parsedResult[0].pid).toBe('1234');
     });
 });
+
+describe('get_service_status', () => {
+    const mockState: AppState = {
+        ssh: { client: null, host_string: null },
+    } as AppState;
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    it('should parse an active and enabled service correctly', async () => {
+        const mockStatusOutput = `
+● nginx.service - A high performance web server and a reverse proxy server
+     Loaded: loaded (/lib/systemd/system/nginx.service; enabled; vendor preset: enabled)
+     Active: active (running) since Wed 2025-10-15 10:00:00 EEST; 5h 2min ago
+   Main PID: 1234 (nginx)
+        `.trim();
+        
+        const runCommandSpy = jest.spyOn(tools, 'run_command').mockResolvedValue(mockStatusOutput);
+        const result = await tools.get_service_status(mockState, { service_name: 'nginx' });
+        const parsedResult = JSON.parse(result);
+
+        expect(parsedResult).toEqual({
+            service: 'nginx',
+            description: 'A high performance web server and a reverse proxy server',
+            is_loaded: true,
+            is_enabled: true,
+            status: 'active',
+            status_details: 'running',
+            main_pid: '1234',
+        });
+    });
+
+    it('should parse an inactive (dead) service correctly', async () => {
+        const mockStatusOutput = `
+● cron.service - Regular background program processing daemon
+     Loaded: loaded (/lib/systemd/system/cron.service; enabled; vendor preset: enabled)
+     Active: inactive (dead) since Tue 2025-10-14 18:00:00 EEST; 21h ago
+   Main PID: 1500 (cron)
+        `.trim();
+
+        jest.spyOn(tools, 'run_command').mockResolvedValue(mockStatusOutput);
+        const result = await tools.get_service_status(mockState, { service_name: 'cron' });
+        const parsedResult = JSON.parse(result);
+
+        expect(parsedResult.status).toBe('inactive');
+        expect(parsedResult.status_details).toBe('dead');
+        expect(parsedResult.is_enabled).toBe(true);
+    });
+
+    it('should handle a service that is not found', async () => {
+        const mockStatusOutput = `Unit non-existent-service.service could not be found.`;
+        jest.spyOn(tools, 'run_command').mockResolvedValue(mockStatusOutput);
+        const result = await tools.get_service_status(mockState, { service_name: 'non-existent-service' });
+        const parsedResult = JSON.parse(result);
+
+        expect(parsedResult.status).toBe('unknown');
+        expect(parsedResult.status_details).toContain('not found');
+    });
+
+    it('should handle non-systemd systems where the command fails', async () => {
+        const mockStatusOutput = `sh: systemctl: command not found`;
+        jest.spyOn(tools, 'run_command').mockResolvedValue(mockStatusOutput);
+        const result = await tools.get_service_status(mockState, { service_name: 'docker' });
+        const parsedResult = JSON.parse(result);
+
+        expect(parsedResult.status).toBe('unknown');
+        expect(parsedResult.status_details).toContain('systemctl command not found');
+    });
+});
