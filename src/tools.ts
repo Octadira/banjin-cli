@@ -5,6 +5,16 @@ import * as path from 'path';
 import { ClientChannel, SFTPWrapper } from 'ssh2';
 import { getMcpToolDefinitions, available_mcp_tools } from './mcp-tools';
 
+// Interface for the structured output of get_disk_usage
+interface DfOutput {
+    filesystem: string;
+    size: string;
+    used: string;
+    available: string;
+    use_percent: string;
+    mounted_on: string;
+}
+
 export function getToolDefinitions() {
     const core_tools = [
         {
@@ -47,6 +57,18 @@ export function getToolDefinitions() {
                         file_path: { type: "string", description: "The relative path to the file." },
                     },
                     required: ["file_path"],
+                },
+            },
+        },
+        {
+            type: "function",
+            function: {
+                name: "get_disk_usage",
+                description: "Retrieves disk usage statistics for all mounted filesystems. Returns a JSON array where each object represents a filesystem and its usage details.",
+                parameters: {
+                    type: "object",
+                    properties: {},
+                    required: [],
                 },
             },
         },
@@ -195,13 +217,53 @@ export async function read_file(state: AppState, args: { file_path: string }): P
     }
 }
 
+export async function get_disk_usage(state: AppState, args: {}): Promise<string> {
+    try {
+        // The -P flag ensures POSIX standard output format, which prevents line wrapping and is more stable for parsing.
+        const dfOutput = await exports.run_command(state, { cmd: ['df', '-h', '-P'] });
+        if (dfOutput.startsWith('Error:')) {
+            return dfOutput;
+        }
+
+        const lines = dfOutput.trim().split('\n');
+        const headerLine = lines.shift(); // remove header line
+        if (!headerLine) {
+            return "Error: 'df' command returned empty output.";
+        }
+
+        const filesystems = lines.map((line: string): DfOutput | null => {
+            // Replace multiple spaces with a single space for easier splitting, then split.
+            const parts = line.trim().replace(/\s+/g, ' ').split(' ');
+            
+            if (parts.length < 6) {
+                return null; // Invalid line, skip
+            }
+
+            return {
+                filesystem: parts[0],
+                size: parts[1],
+                used: parts[2],
+                available: parts[3],
+                use_percent: parts[4],
+                mounted_on: parts[5],
+            };
+        }).filter((fs: DfOutput | null): fs is DfOutput => fs !== null);
+
+        return JSON.stringify(filesystems, null, 2);
+    } catch (error: any) {
+        return `Error getting disk usage: ${error.message}`;
+    }
+}
+
+
 const core_tools: { [key: string]: (state: AppState, args: any) => Promise<string> } = {
     run_command,
     write_file,
     read_file,
+    get_disk_usage,
 };
 
-export const available_tools: { [key: string]: (state: AppState, args: any) => Promise<string> } = {
+export const available_tools: { [key:string]: (state: AppState, args: any) => Promise<string> } = {
     ...core_tools,
     ...available_mcp_tools,
 };
