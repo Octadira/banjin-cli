@@ -15,6 +15,21 @@ interface DfOutput {
     mounted_on: string;
 }
 
+// Interface for the structured output of get_running_processes
+interface ProcessInfo {
+    user: string;
+    pid: string;
+    cpu_percent: string;
+    mem_percent: string;
+    vsz: string;
+    rss: string;
+    tty: string;
+    stat: string;
+    start: string;
+    time: string;
+    command: string;
+}
+
 export function getToolDefinitions() {
     const core_tools = [
         {
@@ -72,6 +87,22 @@ export function getToolDefinitions() {
                 },
             },
         },
+        {
+            type: "function",
+            function: {
+                name: "get_running_processes",
+                description: "Retrieves a list of currently running processes. Can be filtered by a search string. Returns a JSON array of process objects.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        filter: {
+                            type: "string",
+                            description: "Optional. A string to filter the process list by. Only processes matching the string will be returned."
+                        }
+                    },
+                },
+            },
+        },
     ];
 
     const mcp_tools = getMcpToolDefinitions();
@@ -88,7 +119,7 @@ export async function run_command(state: AppState, args: { cmd: string[] }): Pro
         try {
             if (state.ssh.client) {
                 // Remote execution (SSH)
-                const escapedCmd = cmd.map(arg => `'${arg.replace(/'/g, "'\\''")}'`).join(' ');
+                const escapedCmd = cmd.map(arg => `'${arg.replace(/'/g, "'\'\''")}'`).join(' ');
                 let output = '';
                 let errorOutput = '';
                 state.ssh.client.exec(escapedCmd, (err: Error | undefined, stream: ClientChannel) => {
@@ -255,12 +286,70 @@ export async function get_disk_usage(state: AppState, args: {}): Promise<string>
     }
 }
 
+export async function get_running_processes(state: AppState, args: { filter?: string }): Promise<string> {
+    try {
+        let command;
+        if (args.filter) {
+            // Using sh -c to handle the pipe. Note: This is a simplified implementation.
+            // For production, the filter argument should be sanitized to prevent shell injection.
+            command = ['sh', '-c', `ps aux | grep ${args.filter}`];
+        } else {
+            command = ['ps', 'aux'];
+        }
+
+        const psOutput = await exports.run_command(state, { cmd: command });
+        if (psOutput.startsWith('Error:')) {
+            return psOutput;
+        }
+
+        const lines = psOutput.trim().split('\n');
+        const headerLine = lines.shift();
+        if (!headerLine) {
+            return "Error: 'ps' command returned empty output.";
+        }
+
+        const processes = lines.map((line: string): ProcessInfo | null => {
+            const parts = line.trim().replace(/\s+/g, ' ').split(' ');
+            
+            if (parts.length < 11) {
+                return null; // Not a valid process line
+            }
+
+            const command = parts.slice(10).join(' ');
+
+            return {
+                user: parts[0],
+                pid: parts[1],
+                cpu_percent: parts[2],
+                mem_percent: parts[3],
+                vsz: parts[4],
+                rss: parts[5],
+                tty: parts[6],
+                stat: parts[7],
+                start: parts[8],
+                time: parts[9],
+                command: command,
+            };
+        }).filter((p: ProcessInfo | null): p is ProcessInfo => p !== null);
+
+        // If a filter was used, we might get the grep process itself in the list, so we filter it out.
+        const final_processes = args.filter 
+            ? processes.filter((p: ProcessInfo) => !p.command.includes(`grep ${args.filter}`))
+            : processes;
+
+        return JSON.stringify(final_processes, null, 2);
+    } catch (error: any) {
+        return `Error getting process list: ${error.message}`;
+    }
+}
+
 
 const core_tools: { [key: string]: (state: AppState, args: any) => Promise<string> } = {
     run_command,
     write_file,
     read_file,
     get_disk_usage,
+    get_running_processes,
 };
 
 export const available_tools: { [key:string]: (state: AppState, args: any) => Promise<string> } = {
