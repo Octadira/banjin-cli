@@ -26,6 +26,7 @@ const CHECK_INTERVAL = 1000 * 60 * 60 * 24; // 1 day
 interface Cache {
     lastCheck: number;
     latest: string;
+    sourceVersion: string;
 }
 
 async function getUpdateInfo(force: boolean = false): Promise<BanjinUpdateInfo | null> {
@@ -41,8 +42,13 @@ async function getUpdateInfo(force: boolean = false): Promise<BanjinUpdateInfo |
                 const cache = JSON.parse(cacheContent) as Cache;
                 
                 // Validate cache structure
-                if (typeof cache.lastCheck !== 'number' || typeof cache.latest !== 'string') {
+                if (typeof cache.lastCheck !== 'number' || typeof cache.latest !== 'string' || typeof cache.sourceVersion !== 'string') {
                     throw new Error('Invalid cache format');
+                }
+
+                // If cache was created for a different version, ignore it
+                if (cache.sourceVersion !== pkg.version) {
+                    throw new Error('Cache is for a different application version.');
                 }
 
                 if (Date.now() - cache.lastCheck < CHECK_INTERVAL) {
@@ -58,7 +64,7 @@ async function getUpdateInfo(force: boolean = false): Promise<BanjinUpdateInfo |
                     return null;
                 }
             } catch (error) {
-                // If cache is corrupted, continue with fresh check
+                // If cache is corrupted or for another version, continue with fresh check
                 console.debug('Cache read error:', error instanceof Error ? error.message : 'Unknown error');
             }
         }
@@ -69,6 +75,7 @@ async function getUpdateInfo(force: boolean = false): Promise<BanjinUpdateInfo |
         const newCache: Cache = {
             lastCheck: Date.now(),
             latest: update?.latest || pkg.version,
+            sourceVersion: pkg.version,
         };
 
         try {
