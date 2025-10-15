@@ -26,3 +26,5 @@ conversation_log_*.md
 # Gemini CLI
 GEMINI.md
 
+# Banjin local config and cache
+/.banjin/
