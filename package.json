@@ -20,12 +20,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/banjin.git"
+    "url": "https://github.com/octadira/banjin-cli.git"
   },
   "bugs": {
-    "url": "https://github.com/your-username/banjin/issues"
+    "url": "https://github.com/octadira/banjin-cli/issues"
   },
-  "homepage": "https://github.com/your-username/banjin#readme",
+  "homepage": "https://github.com/octadira/banjin-cli#readme",
   "files": [
     "dist",
     "config.example.yaml",
