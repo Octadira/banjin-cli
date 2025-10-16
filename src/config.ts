@@ -21,6 +21,9 @@ export interface AppState {
     configPath: string;
     mcp_servers: any;
     loadedContextFiles: string[];
+    dynamic_tool_defs: any[];
+    dynamic_tool_impls: { [key: string]: (state: AppState, args: any) => Promise<string> };
+    mcp_successful_servers: string[];
 }
 
 export function findConfigPath(): string | null {
@@ -127,6 +130,9 @@ export async function loadInitialState(): Promise<AppState | null> {
             configPath: configPath,
             mcp_servers: mcp_servers,
             loadedContextFiles: loadedContextFiles,
+            dynamic_tool_defs: [],
+            dynamic_tool_impls: {},
+            mcp_successful_servers: [],
         };
         return initialState;
     } catch (e: any) {

@@ -9,6 +9,7 @@ import { AppState, loadInitialState } from './config';
 import { handleSlashCommand } from './commands';
 import { callLlmApi } from './llm';
 import { available_tools } from './tools';
+import { discoverMcpTools } from './mcp-tools';
 import { notifyOnUpdate } from './update';
 const pkg = require('../package.json');
 
@@ -54,6 +55,7 @@ async function checkContextUpdate(state: AppState) {
 function displayUsageSummary(state: AppState) {
     const contextFilesCount = state.loadedContextFiles.length;
     const mcpServersCount = state.mcp_servers?.mcpServers ? Object.keys(state.mcp_servers.mcpServers).length : 0;
+    const dynamicToolsCount = state.dynamic_tool_defs.length;
 
     if (contextFilesCount > 0 || mcpServersCount > 0) {
         console.log(chalk.dim('Using:'));
@@ -61,7 +63,10 @@ function displayUsageSummary(state: AppState) {
             console.log(chalk.dim(`  - ${contextFilesCount} context.md file(s)`));
         }
         if (mcpServersCount > 0) {
-            console.log(chalk.dim(`  - ${mcpServersCount} MCP server(s)`));
+            console.log(chalk.dim(`  - ${mcpServersCount} MCP server(s) configured, discovered ${dynamicToolsCount} total tool(s).`));
+            if (state.mcp_successful_servers.length > 0) {
+                console.log(chalk.dim.green(`    - Successfully loaded from: ${state.mcp_successful_servers.join(', ')}`));
+            }
         }
     }
 }
@@ -76,6 +81,13 @@ async function mainLoop() {
 
     console.log(chalk.green.bold(`Banjin AI Assistant [TS Version v${pkg.version}]. Use /help for commands.`));
     console.log(chalk.dim(`Context loaded from: ${state.configPath}`));
+
+    const discoverySpinner = ora('Discovering MCP tools...').start();
+    const discovered = await discoverMcpTools(state.mcp_servers);
+    state.dynamic_tool_defs = discovered.definitions;
+    state.dynamic_tool_impls = discovered.implementations;
+    state.mcp_successful_servers = discovered.successfulServers;
+    discoverySpinner.stop();
     
     displayUsageSummary(state);
 
@@ -111,7 +123,11 @@ async function mainLoop() {
                     console.log(chalk.dim('User approved. Executing tool...'));
                     const function_name = tool_call.function.name;
                     const function_args = JSON.parse(tool_call.function.arguments);
-                    const function_to_call = available_tools[function_name];
+                    
+                    let function_to_call = available_tools[function_name];
+                    if (!function_to_call) {
+                        function_to_call = state.dynamic_tool_impls[function_name];
+                    }
                     
                     if (function_to_call) {
                         const spinner = ora(`Executing tool: ${function_name}...`).start();

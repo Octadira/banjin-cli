@@ -20,7 +20,7 @@ export async function callLlmApi(state: AppState, onStatusUpdate?: (message: str
         model: model,
         messages: messages_to_send,
         temperature: temperature,
-        tools: getToolDefinitions(),
+        tools: getToolDefinitions(state),
         tool_choice: "auto",
     };
 

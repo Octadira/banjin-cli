@@ -1,87 +1,107 @@
 import { AppState } from './config';
-import axios from 'axios';
-import * as subprocess from 'child_process';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import chalk from 'chalk';
+import { URL } from 'url';
 
-export function getMcpToolDefinitions() {
-    return [
-        {
-            type: "function",
-            function: {
-                name: "mcp_tool",
-                description: "Executes a query against a specified MCP server. Use this to access various MCP functionalities like search, data fetching, etc.",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        server_name: { 
-                            type: "string", 
-                            description: "The name of the MCP server to query.",
-                            enum: ['fetch', 'context7', 'ddg-search', 'deepwiki']
-                        },
-                        query: { 
-                            type: "string", 
-                            description: "The query or prompt to send to the MCP server."
-                        },
-                    },
-                    required: ["server_name", "query"],
-                },
-            },
-        },
-    ];
+export interface DiscoveredMcpTools {
+    definitions: any[];
+    implementations: { [key: string]: (state: AppState, args: any) => Promise<string> };
+    successfulServers: string[];
 }
 
-async function execute_remote_mcp(url: string, query: string): Promise<string> {
-    try {
-        const response = await axios.post(url, { query });
-        return response.data;
-    } catch (error: any) {
-        return `Error calling remote MCP tool at ${url}: ${error.message}`;
+export async function discoverMcpTools(mcp_servers: any): Promise<DiscoveredMcpTools> {
+    const definitions: any[] = [];
+    const implementations: { [key: string]: (state: AppState, args: any) => Promise<string> } = {};
+    const successfulServers: string[] = [];
+
+    if (!mcp_servers?.mcpServers) {
+        return { definitions, implementations, successfulServers };
     }
-}
 
-async function execute_local_mcp(command: string, args: string[], query: string): Promise<string> {
-    return new Promise((resolve) => {
-        const full_args = [...args, query];
-        const child = subprocess.spawn(command, full_args, { shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
+    const discoveryPromises = Object.keys(mcp_servers.mcpServers).map(async (serverName) => {
+        const serverConfig = mcp_servers.mcpServers[serverName];
+        const client = new Client({ name: 'banjin-client', version: '1.4.0' });
+        let transport;
 
-        let stdout = '';
-        let stderr = '';
+        if (serverConfig.url) {
+            transport = new StreamableHTTPClientTransport(new URL(serverConfig.url));
+        } else if (serverConfig.command) {
+            const augmentedArgs = [...(serverConfig.args || []), '--json'];
+            transport = new StdioClientTransport({ 
+                command: serverConfig.command, 
+                args: augmentedArgs,
+                env: serverConfig.env || process.env
+            });
+        } else {
+            return; // Skip if no url or command
+        }
 
-        child.stdout.on('data', (data) => { stdout += data.toString(); });
-        child.stderr.on('data', (data) => { stderr += data.toString(); });
-
-        child.on('close', (code) => {
-            if (code !== 0) {
-                resolve(`Local MCP tool exited with code ${code}. Stderr: ${stderr.trim()}`);
-            } else {
-                resolve(stdout);
+        try {
+            await client.connect(transport);
+            const toolsResult = await client.listTools();
+            
+            if (toolsResult) {
+                successfulServers.push(serverName);
             }
-        });
 
-        child.on('error', (err) => {
-            resolve(`Error executing local MCP tool: ${err.message}`);
-        });
+            if (!toolsResult.tools) return;
+
+            for (const tool of toolsResult.tools) {
+                const dynamicToolName = `${serverName}_${tool.name}`.replace(/-/g, '_');
+
+                implementations[dynamicToolName] = async (state: AppState, tool_args: any): Promise<string> => {
+                    const callClient = new Client({ name: 'banjin-client', version: '1.4.0' });
+                    let callTransport;
+                    if (serverConfig.url) {
+                        callTransport = new StreamableHTTPClientTransport(new URL(serverConfig.url));
+                    } else if (serverConfig.command) {
+                        const augmentedArgs = [...(serverConfig.args || []), '--json'];
+                        callTransport = new StdioClientTransport({ 
+                            command: serverConfig.command, 
+                            args: augmentedArgs,
+                            env: serverConfig.env || process.env
+                        });
+                    } else {
+                        return `Error: Invalid configuration for MCP server '${serverName}'.`;
+                    }
+
+                    try {
+                        await callClient.connect(callTransport);
+                        const result = await callClient.callTool({ name: tool.name, arguments: tool_args });
+                        const content = result.content as any;
+                        return typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+                    } catch (e: any) {
+                        if (e && typeof e === 'object' && 'isAxiosError' in e) {
+                            const axiosError = e as any;
+                            return `Error during MCP tool execution: Request failed with status ${axiosError.response?.status}. Message: ${axiosError.message}`;
+                        }
+                        return `Error calling MCP tool ${dynamicToolName}: ${e.message}`;
+                    } finally {
+                        await callClient.close();
+                    }
+                };
+
+                definitions.push({
+                    type: "function",
+                    function: {
+                        name: dynamicToolName,
+                        description: tool.description,
+                        parameters: tool.inputSchema,
+                    },
+                });
+            }
+        } catch (e: any) {
+            if (!e.message.includes('Process was closed')) {
+                console.warn(chalk.yellow(`  - MCP Warning: Could not discover tools for '${serverName}'. ${e.message}`));
+            }
+        } finally {
+            await client.close();
+        }
     });
+
+    await Promise.all(discoveryPromises);
+
+    return { definitions, implementations, successfulServers };
 }
-
-export async function mcp_tool(state: AppState, args: { server_name: string, query: string }): Promise<string> {
-    const { server_name, query } = args;
-    const server_config = state.mcp_servers?.mcpServers?.[server_name];
-
-    if (!server_config) {
-        return `Error: MCP server '${server_name}' not found in configuration.`;
-    }
-
-    if (server_config.url) {
-        return execute_remote_mcp(server_config.url, query);
-    }
-
-    if (server_config.command) {
-        return execute_local_mcp(server_config.command, server_config.args || [], query);
-    }
-
-    return `Error: Invalid configuration for MCP server '${server_name}'.`;
-}
-
-export const available_mcp_tools: { [key: string]: (state: AppState, args: any) => Promise<string> } = {
-    mcp_tool,
-};
