@@ -1,5 +1,6 @@
 import { AppState, loadMcpServers, findConfigPath } from './config';
 import { forceCheckForUpdate } from './update';
+import { loadSshServers, saveSshServers, SshServer } from './ssh-manager';
 import chalk from 'chalk';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -48,9 +49,12 @@ Available Commands:
 
   Connections & Files:
   /status              - Show current SSH connection status
-  /connect <user@host> - Connect to a remote server via SSH
+  /connect <alias|user@host> - Connect to a server via alias or direct connection
   /disconnect          - Disconnect from the remote server
   /ls-files [path]     - List files and directories
+  /list-ssh            - List all saved SSH server aliases
+  /add-ssh <alias> <user@host> [-i key_path] - Add or update a saved SSH server
+  /rm-ssh <alias>      - Remove a saved SSH server
 
   MCP Tools:
   /mcp-list            - List available MCP servers from config
@@ -90,10 +94,27 @@ Available Commands:
                 break;
             }
             if (args.length === 0) {
-                console.log(chalk.red('Usage: /connect user@hostname [-i /path/to/key]'));
+                console.log(chalk.red('Usage: /connect <alias | user@hostname> [-i /path/to/key]'));
                 break;
             }
-            connectSsh(state, args);
+            const connectArg = args[0];
+            if (connectArg.includes('@')) {
+                // Direct connection
+                connectSsh(state, args);
+            } else {
+                // Alias connection
+                const servers = loadSshServers();
+                const server = servers[connectArg];
+                if (server) {
+                    const connectParams = [`${server.user}@${server.host}`];
+                    if (server.keyPath) {
+                        connectParams.push('-i', server.keyPath);
+                    }
+                    connectSsh(state, connectParams);
+                } else {
+                    console.log(chalk.red(`Error: SSH alias '${connectArg}' not found.`));
+                }
+            }
             break;
 
         case '/disconnect':
@@ -104,6 +125,62 @@ Available Commands:
                 state.ssh.host_string = null;
             } else {
                 console.log(chalk.yellow('Not connected.'));
+            }
+            break;
+
+        case '/list-ssh':
+            const servers = loadSshServers();
+            if (Object.keys(servers).length === 0) {
+                console.log(chalk.yellow('No saved SSH servers.'));
+                break;
+            }
+            console.log(chalk.yellow('Saved SSH Servers:\n'));
+            for (const alias in servers) {
+                const server = servers[alias];
+                const keyInfo = server.keyPath ? `(key: ${server.keyPath})` : '(password/default key)';
+                console.log(`  - ${chalk.bold(alias)}: ${server.user}@${server.host} ${chalk.dim(keyInfo)}`);
+            }
+            break;
+
+        case '/add-ssh':
+            if (args.length < 2) {
+                console.log(chalk.red('Usage: /add-ssh <alias> <user@host> [-i /path/to/key]'));
+                break;
+            }
+            const [alias, userAtHost] = args;
+            const keyIndex = args.indexOf('-i');
+            let keyPath: string | undefined;
+            if (keyIndex !== -1 && args.length > keyIndex + 1) {
+                keyPath = args[keyIndex + 1];
+            }
+
+            if (!userAtHost.includes('@')) {
+                console.log(chalk.red('Invalid format. Please use <user@host>.'));
+                break;
+            }
+            const [user, host] = userAtHost.split('@');
+
+            const sshConfig = loadSshServers();
+            sshConfig[alias] = { user, host, keyPath };
+            if (saveSshServers(sshConfig)) {
+                console.log(chalk.green(`SSH server '${alias}' saved.`));
+            }
+            break;
+
+        case '/rm-ssh':
+            if (args.length === 0) {
+                console.log(chalk.red('Usage: /rm-ssh <alias>'));
+                break;
+            }
+            const aliasToRemove = args[0];
+            const sshConfigToRemove = loadSshServers();
+            if (sshConfigToRemove[aliasToRemove]) {
+                delete sshConfigToRemove[aliasToRemove];
+                if (saveSshServers(sshConfigToRemove)) {
+                    console.log(chalk.green(`SSH server '${aliasToRemove}' removed.`));
+                }
+            } else {
+                console.log(chalk.red(`Error: SSH alias '${aliasToRemove}' not found.`));
             }
             break;
 
@@ -253,6 +330,7 @@ Available Commands:
 
 async function connectSsh(state: AppState, args: string[]) {
     const hostString = args[0];
+    // This check is now handled by the caller, but we keep it as a fallback.
     if (!hostString.includes('@')) {
         console.log(chalk.red('Invalid host string. Format should be user@hostname'));
         return;
