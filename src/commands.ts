@@ -53,7 +53,8 @@ Available Commands:
   /ls-files [path]     - List files and directories
 
   MCP Tools:
-  /mcp-list            - List available MCP servers
+  /mcp-list            - List available MCP servers from config
+  /mcp-tools           - List all discovered tools from loaded MCP servers
   /mcp-reload          - Reload the MCP servers configuration
 
   General:
@@ -179,6 +180,25 @@ Available Commands:
                 console.log(chalk.yellow('Available MCP Servers:\n') + serverNames.map(s => `  - ${s}`).join('\n'));
             } else {
                 console.log(chalk.yellow('No MCP servers configured.'));
+            }
+            break;
+
+        case '/mcp-tools':
+            if (state.dynamic_tool_defs.length === 0) {
+                console.log(chalk.yellow('No MCP tools were discovered.'));
+                break;
+            }
+            console.log(chalk.yellow('Discovered MCP Tools:\n'));
+            for (const toolDef of state.dynamic_tool_defs) {
+                const fullName = toolDef.function.name;
+                const parts = fullName.split('_');
+                const serverName = parts.shift();
+                const originalName = parts.join('_');
+
+                console.log(chalk.cyan.bold(`  Tool: ${fullName}`));
+                console.log(chalk.dim(`    - Original Name: ${originalName}`));
+                console.log(chalk.dim(`    - Server: ${serverName}`));
+                console.log(chalk.dim(`    - Description: ${toolDef.function.description || 'N/A'}`));
             }
             break;
 

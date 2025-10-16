@@ -3,7 +3,6 @@ import * as subprocess from 'child_process';
 import { promises as fsPromises } from 'fs';
 import * as path from 'path';
 import { ClientChannel, SFTPWrapper } from 'ssh2';
-import { getMcpToolDefinitions, available_mcp_tools } from './mcp-tools';
 
 // Interface for the structured output of get_disk_usage
 interface DfOutput {
@@ -41,7 +40,7 @@ interface ServiceStatusInfo {
     main_pid?: string;
 }
 
-export function getToolDefinitions() {
+export function getToolDefinitions(state: AppState) {
     const core_tools = [
         {
             type: "function",
@@ -133,8 +132,7 @@ export function getToolDefinitions() {
         },
     ];
 
-    const mcp_tools = getMcpToolDefinitions();
-    return [...core_tools, ...mcp_tools];
+    return [...core_tools, ...state.dynamic_tool_defs];
 }
 
 export async function run_command(state: AppState, args: { cmd: string[] }): Promise<string> {
@@ -439,5 +437,5 @@ const core_tools: { [key: string]: (state: AppState, args: any) => Promise<strin
 
 export const available_tools: { [key:string]: (state: AppState, args: any) => Promise<string> } = {
     ...core_tools,
-    ...available_mcp_tools,
+    // ...available_mcp_tools, // This is now handled dynamically
 };
