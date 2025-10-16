@@ -90,12 +90,16 @@ Banjin supports slash commands (e.g., `/help`) for direct instructions. You can 
 
   **Connections & Files:**
   /status              - Show current SSH connection status
-  /connect <user@host> - Connect to a remote server via SSH
+  /connect <alias|user@host> - Connect to a server via alias or direct connection
   /disconnect          - Disconnect from the remote server
   /ls-files [path]     - List files and directories
+  /list-ssh            - List all saved SSH server aliases
+  /add-ssh <alias> <user@host> [-i key_path] - Add or update a saved SSH server
+  /rm-ssh <alias>      - Remove a saved SSH server
 
   **MCP Tools:**
-  /mcp-list            - List available MCP servers
+  /mcp-list            - List available MCP servers from config
+  /mcp-tools           - List all discovered tools from loaded MCP servers
   /mcp-reload          - Reload the MCP servers configuration
 
   **General:**
