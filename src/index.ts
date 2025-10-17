@@ -16,7 +16,10 @@ import { notifyOnUpdate } from './update';
 const pkg = require('../package.json');
 
 import ora from 'ora';
+import { ensureMarkdownRenderer, renderForTerminal } from './terminal-render';
 
+// Render Markdown nicely in the terminal (fallback to plain text if deps missing)
+export { renderForTerminal };
 // Helper function for the 'multiline' input mode
 function getMultilineInput(): Promise<string | null> {
     return new Promise((resolve) => {
@@ -114,6 +117,11 @@ async function mainLoop() {
     const state: AppState | null = await loadInitialState();
     if (!state) return;
 
+    // Prepare Markdown renderer if user prefers markdown
+    if (state.session_config?.cli?.output_format === 'markdown') {
+        await ensureMarkdownRenderer();
+    }
+
     await checkContextUpdate(state);
 
     console.log(chalk.green.bold(`Banjin AI Assistant [TS Version v${pkg.version}]. Use /help for commands.`));
@@ -154,7 +162,23 @@ async function mainLoop() {
                 } else if (firstLine) {
                     const inputMode = state.session_config.cli?.input_mode || 'line';
                     if (inputMode === 'editor') {
-                        final_input = await editor({ message: 'Opening editor... (save and close to submit)', default: firstLine });
+                        try {
+                            const edited = await editor({ message: 'Opening editor... (save and close to submit)', default: firstLine });
+                            // If user closed editor without saving (content unchanged) or content is empty, treat as cancel
+                            if (typeof edited !== 'string') {
+                                console.log(chalk.yellow('\nCancelled.'));
+                                continue;
+                            }
+                            const trimmed = edited.trim();
+                            if (edited === firstLine || trimmed.length === 0) {
+                                console.log(chalk.yellow('\nCancelled (editor closed without changes).'));
+                                continue;
+                            }
+                            final_input = edited;
+                        } catch (e) {
+                            console.log(chalk.yellow('\nCancelled.'));
+                            continue;
+                        }
                     } else if (inputMode === 'multiline') {
                         const restOfInput = await getMultilineInput();
                         if (restOfInput === null) {
@@ -220,7 +244,8 @@ async function mainLoop() {
                                 console.log(chalk.bold.cyan(tool_name));
                                 console.log(chalk.dim(tool_args));
                             } else if (post_tool_llm_response.content) {
-                                console.log(chalk.green('Banjin: ') + post_tool_llm_response.content);
+                                const rendered = renderForTerminal(state, post_tool_llm_response.content);
+                                console.log(chalk.green('Banjin:') + '\n' + rendered);
                             }
                         }
                     } else {
@@ -236,7 +261,8 @@ async function mainLoop() {
                     });
                     const denial_response = await callLlmApi(state);
                     if (denial_response && denial_response.content) {
-                        console.log(chalk.green('Banjin: ') + denial_response.content);
+                        const rendered = renderForTerminal(state, denial_response.content);
+                        console.log(chalk.green('Banjin:') + '\n' + rendered);
                     }
                 }
             } else if (final_input) { // This block now only handles sending the final input to the LLM
@@ -300,7 +326,8 @@ async function mainLoop() {
                             console.log(chalk.dim(tool_args));
 
                         } else if (response_message.content) {
-                            console.log(chalk.green('Banjin: ') + response_message.content);
+                            const rendered = renderForTerminal(state, response_message.content);
+                            console.log(chalk.green('Banjin:') + '\n' + rendered);
                         }
                     }
                 } catch (e) {

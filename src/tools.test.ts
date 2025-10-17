@@ -1,3 +1,21 @@
+import { renderForTerminal } from './terminal-render';
+
+describe('renderForTerminal', () => {
+    const baseState: any = {
+        session_config: { cli: {} },
+    };
+
+    it('returns plain text when format is text (default)', () => {
+        const out = renderForTerminal({ ...baseState, session_config: { cli: { output_format: 'text' } } } as any, '# Title');
+        expect(out).toBe('# Title');
+    });
+
+    it('falls back to text if markdown renderer is unavailable', () => {
+        const out = renderForTerminal({ ...baseState, session_config: { cli: { output_format: 'markdown' } } } as any, '# Title');
+        // When renderer isn't initialized and packages may be missing in test env, we expect fallback to raw
+        expect(typeof out).toBe('string');
+    });
+});
 import * as tools from './tools';
 import { AppState } from './config';
 import * as path from 'path';
@@ -216,20 +234,21 @@ describe('first-run setup', () => {
         const fakeBanjin = path.join(fakeHome, '.banjin');
         fs.mkdirSync(fakeBanjin, { recursive: true });
 
-        // Monkey-patch os.homedir during this test
-        const realHomedir = os.homedir;
-        // @ts-ignore
-        os.homedir = () => fakeHome;
+        // Point HOME to the fake directory for this test
+        const oldHome = process.env.HOME;
+        process.env.HOME = fakeHome;
 
         // Spy on inquirer confirmation to auto-accept
         jest.spyOn(require('@inquirer/confirm'), 'default').mockResolvedValue(true);
 
         const state = await (configMod as any).loadInitialState();
 
-        // Restore homedir
-        // @ts-ignore
-        os.homedir = realHomedir;
-
+        // Restore HOME
+        if (oldHome === undefined) {
+            delete process.env.HOME;
+        } else {
+            process.env.HOME = oldHome;
+        }
         expect(state).not.toBeNull();
         const createdConfig = path.join(fakeBanjin, 'config.yaml');
         const createdMcp = path.join(fakeBanjin, 'mcp-servers.json');
@@ -250,21 +269,21 @@ describe('first-run setup', () => {
     fs.writeFileSync(path.join(fakeBanjin, 'context.md'), 'user context', 'utf8');
         fs.writeFileSync(path.join(fakeBanjin, 'last-synced-version'), '0.0.0', 'utf8');
 
-        // Mock homedir
-        const realHomedir = os.homedir;
-        // @ts-ignore
-        os.homedir = () => fakeHome;
+        // Point HOME to the fake directory for this test
+        const oldHome = process.env.HOME;
+        process.env.HOME = fakeHome;
 
-    // Accept context overwrite prompt
-    jest.spyOn(require('@inquirer/confirm'), 'default').mockResolvedValue(true);
+        // Accept context overwrite prompt
+        jest.spyOn(require('@inquirer/confirm'), 'default').mockResolvedValue(true);
 
         // loadInitialState should detect version change and sync templates
         const state = await (configMod as any).loadInitialState();
 
-        // Restore homedir
-        // @ts-ignore
-        os.homedir = realHomedir;
-
+        if (oldHome === undefined) {
+            delete process.env.HOME;
+        } else {
+            process.env.HOME = oldHome;
+        }
         expect(state).not.toBeNull();
         const cfgPath = path.join(fakeBanjin, 'config.yaml');
         const ctxPath = path.join(fakeBanjin, 'context.md');

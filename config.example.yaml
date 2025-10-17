@@ -17,3 +17,8 @@ cli:
   #   - "editor": Opens the default system editor for multi-line input.
   #   - "multiline": Simple in-terminal multi-line input (end with a double enter).
   input_mode: "line"
+  # The output format for responses in the terminal.
+  # Available options:
+  #   - "text": Plain text (default)
+  #   - "markdown": Render Markdown with formatting in the terminal
+  output_format: "text"

@@ -9,6 +9,7 @@ import { Client } from 'ssh2';
 import { spawn } from 'child_process';
 
 import * as readlineSync from 'readline-sync';
+import * as yaml from 'yaml';
 
 const getPassword = (prompt: string): string => {
     try {
@@ -34,40 +35,43 @@ export async function handleSlashCommand(state: AppState, input: string): Promis
 Available Commands:
 
   Chat & Context:
-  /context             - Display the current system context
-  /resetchat           - Reset the current conversation memory
-  /savechat            - Save the conversation to a file
-  /loadchat <filename> - Load a conversation from a file
-  /chats-list          - List saved chat files
-  /chats-delete <file> - Delete a saved chat file
+    /context             - Display the current system context
+    /resetchat           - Reset the current conversation memory
+    /savechat            - Save the conversation to a file
+    /loadchat <filename> - Load a conversation from a file
+    /chats-list          - List saved chat files
+    /chats-delete <file> - Delete a saved chat file
 
+   
   LLM & Model:
-  /model <model_name>  - Change the LLM model for this session
-  /temp <0.0-2.0>      - Change the LLM temperature for this session
-  /model-reset         - Reset model to the value from config file
-  /temp-reset          - Reset temperature to the value from config file
+    /model <model_name>               - Change the LLM model for this session
+    /temp <0.0-2.0>                   - Change the LLM temperature for this session
+    /model-reset                      - Reset model to the value from config file
+    /temp-reset                       - Reset temperature to the value from config file
 
   Interface:
-  /mode <line|editor|multiline> - Change the input mode for the current session
+    /mode <line|editor|multiline>     - Change the input mode for the current session
+    /output [markdown|text] [--save]  - Show or set output format; use --save to persist to config
+    /output-reset                     - Reset output format to default from config
 
   Connections & Files:
-  /status              - Show current SSH connection status
-  /connect <alias|user@host> - Connect to a server via alias or direct connection
-  /disconnect          - Disconnect from the remote server
-  /ls-files [path]     - List files and directories
-  /list-ssh            - List all saved SSH server aliases
-  /add-ssh <alias> <user@host> [-i key_path] - Add or update a saved SSH server
-  /rm-ssh <alias>      - Remove a saved SSH server
+    /status              - Show current SSH connection status
+    /connect <alias|user@host> - Connect to a server via alias or direct connection
+    /disconnect          - Disconnect from the remote server
+    /ls-files [path]     - List files and directories
+    /list-ssh            - List all saved SSH server aliases
+    /add-ssh <alias> <user@host> [-i key_path] - Add or update a saved SSH server
+    /rm-ssh <alias>      - Remove a saved SSH server
 
   MCP Tools:
-  /mcp-list            - List available MCP servers from config
-  /mcp-tools           - List all discovered tools from loaded MCP servers
-  /mcp-reload          - Reload the MCP servers configuration
+    /mcp-list            - List available MCP servers from config
+    /mcp-tools           - List all discovered tools from loaded MCP servers
+    /mcp-reload          - Reload the MCP servers configuration
 
   General:
-  /help                - Show this help message
-  /clear               - Clear the screen
-  /update              - Check for application updates
+    /help                - Show this help message
+    /clear               - Clear the screen
+    /update              - Check for application updates
 `));
             break;
 
@@ -243,6 +247,53 @@ Available Commands:
                 }
             }
             break;
+
+        case '/output':
+        case '/output-format': {
+            const allowed = ['markdown', 'text'];
+            const hasSave = args.includes('--save') || args.includes('-s');
+            const fmtArg = args.find(a => !a.startsWith('-'));
+
+            const current = state.session_config?.cli?.output_format || 'markdown';
+            if (!fmtArg) {
+                console.log(chalk.yellow(`Current output format: ${current}`));
+                console.log(chalk.dim(`Usage: /output <${allowed.join('|')}> [--save]`));
+                break;
+            }
+
+            const fmt = fmtArg.toLowerCase();
+            if (!allowed.includes(fmt)) {
+                console.log(chalk.red(`Invalid output format. Use one of: ${allowed.join(', ')}`));
+                break;
+            }
+
+            if (!state.session_config.cli) state.session_config.cli = {};
+            state.session_config.cli.output_format = fmt;
+            console.log(chalk.yellow(`Output format for this session set to: ${fmt}`));
+
+            if (hasSave) {
+                const configFile = path.join(state.configPath, 'config.yaml');
+                try {
+                    const raw = fs.readFileSync(configFile, 'utf8');
+                    const conf = yaml.parse(raw) || {};
+                    if (!conf.cli) conf.cli = {};
+                    conf.cli.output_format = fmt;
+                    fs.writeFileSync(configFile, yaml.stringify(conf));
+                    console.log(chalk.green('Output format saved to config.yaml'));
+                } catch (e: any) {
+                    console.log(chalk.red(`Failed to save to config.yaml: ${e.message}`));
+                }
+            }
+            break;
+        }
+
+        case '/output-reset': {
+            const defaultFmt = (state.original_config?.cli?.output_format) || 'text';
+            if (!state.session_config.cli) state.session_config.cli = {};
+            state.session_config.cli.output_format = defaultFmt;
+            console.log(chalk.yellow(`Output format reset to default: ${defaultFmt}`));
+            break;
+        }
 
         case '/model-reset':
             state.session_config.llm.model = state.original_config.llm.model;
