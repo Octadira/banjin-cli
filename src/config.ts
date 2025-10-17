@@ -52,7 +52,7 @@ async function syncTemplates(configDir: string, options: { promptContext: boolea
     if (fs.existsSync(exampleConfigPath)) {
         const cfgTarget = path.join(configDir, 'config.yaml');
         let existingLlm: { apiKey?: string; model?: string; temperature?: number; baseUrl?: string } = {};
-        let existingCli: { output_format?: string; input_mode?: string } = {};
+        let existingCli: { output_format?: string; input_mode?: string; tool_timeout?: number } = {};
         try {
             if (fs.existsSync(cfgTarget)) {
                 const oldYaml = fs.readFileSync(cfgTarget, 'utf8');
@@ -90,6 +90,9 @@ async function syncTemplates(configDir: string, options: { promptContext: boolea
             }
             if (typeof existingCli.input_mode === 'string') {
                 newConf.cli.input_mode = existingCli.input_mode;
+            }
+            if (typeof existingCli.tool_timeout === 'number') {
+                newConf.cli.tool_timeout = existingCli.tool_timeout;
             }
             fs.writeFileSync(cfgTarget, yaml.stringify(newConf));
             fs.chmodSync(cfgTarget, 0o600);

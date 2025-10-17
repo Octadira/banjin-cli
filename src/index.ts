@@ -17,9 +17,11 @@ const pkg = require('../package.json');
 
 import ora from 'ora';
 import { ensureMarkdownRenderer, renderForTerminal } from './terminal-render';
+import { ensureTerminalCleanState } from './terminal-utils';
 
 // Render Markdown nicely in the terminal (fallback to plain text if deps missing)
 export { renderForTerminal };
+
 // Helper function for the 'multiline' input mode
 function getMultilineInput(): Promise<string | null> {
     return new Promise((resolve) => {
@@ -217,9 +219,68 @@ async function mainLoop() {
                     }
                     
                     if (function_to_call) {
-                        const spinner = ora(`Executing tool: ${function_name}...`).start();
-                        const tool_response = await function_to_call(state, function_args);
-                        spinner.succeed();
+                        const spinner = ora({ text: `Executing tool: ${function_name}...`, spinner: 'dots' });
+                        spinner.info(chalk.dim('(press ESC to cancel)'));
+                        spinner.start();
+
+                        let toolKeypressListener: ((str: string, key: any) => void) | undefined;
+                        const cleanupToolListener = () => {
+                            if (toolKeypressListener) {
+                                process.stdin.removeListener('keypress', toolKeypressListener);
+                                toolKeypressListener = undefined;
+                            }
+                            ensureTerminalCleanState();
+                        };
+
+                        let tool_response: string;
+                        try {
+                            const cancelToolPromise = new Promise<string>(resolve => {
+                                readline.emitKeypressEvents(process.stdin);
+                                if (process.stdin.isTTY) {
+                                    process.stdin.setRawMode(true);
+                                }
+                                toolKeypressListener = (str, key) => {
+                                    if (key.name === 'escape') {
+                                        resolve('__CANCELLED_BY_USER__');
+                                    }
+                                };
+                                process.stdin.on('keypress', toolKeypressListener);
+                            });
+
+                            const toolCall = function_to_call(state, function_args);
+                            
+                            // Add timeout if configured (0 = no timeout)
+                            const timeoutMs = (state.session_config?.cli?.tool_timeout ?? 300) * 1000;
+                            const promises: Promise<string>[] = [toolCall, cancelToolPromise];
+                            
+                            if (timeoutMs > 0) {
+                                const timeoutPromise = new Promise<string>(resolve => {
+                                    setTimeout(() => resolve('__TIMEOUT__'), timeoutMs);
+                                });
+                                promises.push(timeoutPromise);
+                            }
+
+                            const result = await Promise.race(promises);
+
+                            cleanupToolListener();
+
+                            if (result === '__CANCELLED_BY_USER__') {
+                                spinner.fail('Tool execution cancelled by user.');
+                                tool_response = 'Tool execution was cancelled by the user.';
+                                // Small delay to allow terminal to settle
+                                await new Promise(resolve => setTimeout(resolve, 50));
+                            } else if (result === '__TIMEOUT__') {
+                                spinner.fail(`Tool execution timed out after ${timeoutMs / 1000}s.`);
+                                tool_response = `Tool execution timed out after ${timeoutMs / 1000} seconds. Consider increasing cli.tool_timeout in config or set to 0 to disable.`;
+                            } else {
+                                spinner.succeed();
+                                tool_response = result as string;
+                            }
+                        } catch (error: any) {
+                            cleanupToolListener();
+                            spinner.fail('Tool execution failed.');
+                            tool_response = `Error: ${error.message}`;
+                        }
                     
                         state.conversation.push({
                             role: 'tool',
@@ -276,10 +337,9 @@ async function mainLoop() {
                 const cleanupListener = () => {
                     if (keypressListener) {
                         process.stdin.removeListener('keypress', keypressListener);
+                        keypressListener = undefined;
                     }
-                    if (process.stdin.isTTY) {
-                        process.stdin.setRawMode(false);
-                    }
+                    ensureTerminalCleanState();
                 };
 
                 try {
@@ -345,6 +405,15 @@ async function mainLoop() {
             break;
         }
     }
+    
+    // Cleanup and exit
+    ensureTerminalCleanState();
 }
 
-mainLoop();
+mainLoop().then(() => {
+    process.exit(0);
+}).catch((err) => {
+    console.error(chalk.red('Fatal error:'), err);
+    ensureTerminalCleanState();
+    process.exit(1);
+});

@@ -22,3 +22,7 @@ cli:
   #   - "text": Plain text (default)
   #   - "markdown": Render Markdown with formatting in the terminal
   output_format: "text"
+  # Maximum time (in seconds) to wait for tool execution before timeout.
+  # Set to 0 to disable timeout (wait indefinitely).
+  # Default: 300 seconds (5 minutes)
+  tool_timeout: 300
