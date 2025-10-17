@@ -18,6 +18,9 @@
   ],
   "author": "Octadira",
   "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/octadira/banjin-cli.git"
@@ -34,12 +37,14 @@
   ],
   "type": "commonjs",
   "dependencies": {
+    "@inquirer/confirm": "^5.1.19",
+    "@inquirer/editor": "^4.2.21",
+    "@inquirer/input": "^4.2.5",
     "@modelcontextprotocol/sdk": "^1.20.0",
     "axios": "^1.12.2",
     "chalk": "^5.6.2",
     "commander": "^14.0.1",
     "glob": "^11.0.3",
-    "inquirer": "^12.9.6",
     "ora": "^5.4.1",
     "readline-sync": "^1.4.10",
     "ssh2": "^1.17.0",

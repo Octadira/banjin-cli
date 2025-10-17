@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-import inquirer from 'inquirer';
+import input from '@inquirer/input';
+import editor from '@inquirer/editor';
+import confirm from '@inquirer/confirm';
 import chalk from 'chalk';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -14,6 +16,45 @@ import { notifyOnUpdate } from './update';
 const pkg = require('../package.json');
 
 import ora from 'ora';
+
+// Helper function for the 'multiline' input mode
+function getMultilineInput(): Promise<string | null> {
+    return new Promise((resolve) => {
+        const rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout,
+        });
+
+        const lines: string[] = [];
+        console.log(chalk.dim('(Submit with a blank line. Press Ctrl+C to cancel)'));
+        process.stdout.write(chalk.dim('... '));
+
+        const cleanup = () => {
+            rl.removeListener('line', onLine);
+            rl.removeListener('SIGINT', onSigInt);
+            rl.close();
+        };
+
+        const onLine = (line: string) => {
+            if (line.trim() === '') {
+                cleanup();
+                resolve(lines.join('\n'));
+            } else {
+                lines.push(line);
+                process.stdout.write(chalk.dim('... '));
+            }
+        };
+
+        const onSigInt = () => {
+            cleanup();
+            resolve(null); // Resolve with null to indicate cancellation
+        };
+
+        rl.on('line', onLine);
+        rl.on('SIGINT', onSigInt);
+    });
+}
+
 
 async function checkContextUpdate(state: AppState) {
     const globalContextPath = path.join(os.homedir(), '.banjin', 'context.md');
@@ -31,16 +72,12 @@ async function checkContextUpdate(state: AppState) {
     const templateContext = fs.readFileSync(templateContextPath, 'utf8');
 
     if (userContext !== templateContext) {
-        const answers = await inquirer.prompt([
-            {
-                type: 'confirm',
-                name: 'updateContext',
-                message: 'Your global context.md differs from the latest template. Would you like to overwrite it? (Your local changes will be lost)',
-                default: false,
-            },
-        ]);
+        const confirmation = await confirm({
+            message: 'Your global context.md differs from the latest template. Would you like to overwrite it? (Your local changes will be lost)',
+            default: false,
+        });
 
-        if (answers.updateContext) {
+        if (confirmation) {
             try {
                 fs.copyFileSync(templateContextPath, globalContextPath);
                 console.log(chalk.green('Global context.md has been updated. Please restart the application to see the changes.'));
@@ -93,21 +130,47 @@ async function mainLoop() {
 
     while (true) {
         try {
-            const promptPrefix = state.ssh.host_string
-                ? chalk.cyan.bold(`[${state.ssh.host_string}]> `)
-                : chalk.bold('> ');
-            
-            const confirmPrefix = chalk.yellow.bold('Approve? (y/n)> ');
+            // --- Main Input Logic --- //
+            let final_input: string | null = null;
 
-            const answers = await inquirer.prompt([
-                {
-                    type: 'input',
-                    name: 'prompt',
-                    message: state.is_confirming ? confirmPrefix : promptPrefix,
-                },
-            ]);
+            if (state.is_confirming) {
+                const confirmation = await confirm({ message: chalk.yellow.bold('Approve? (y/n)> ') });
+                final_input = confirmation ? 'y' : 'n';
+            } else {
+                const promptPrefix = state.ssh.host_string
+                    ? chalk.cyan.bold(`[${state.ssh.host_string}]> `)
+                    : chalk.bold('> ');
+                
+                const firstLine = await input({ message: promptPrefix });
 
-            const input = answers.prompt.trim();
+                if (firstLine.startsWith('/') || firstLine.startsWith('.')) {
+                    const command = firstLine.startsWith('/') ? firstLine : '/' + firstLine.slice(1).trim();
+                    const shouldExit = await handleSlashCommand(state, command);
+                    if (shouldExit) {
+                        console.log(chalk.yellow('\nGoodbye!'));
+                        break;
+                    }
+                    continue;
+                } else if (firstLine) {
+                    const inputMode = state.session_config.cli?.input_mode || 'line';
+                    if (inputMode === 'editor') {
+                        final_input = await editor({ message: 'Opening editor... (save and close to submit)', default: firstLine });
+                    } else if (inputMode === 'multiline') {
+                        const restOfInput = await getMultilineInput();
+                        if (restOfInput === null) {
+                            console.log(chalk.yellow('\nCancelled.'));
+                            continue;
+                        }
+                        final_input = [firstLine, restOfInput].join('\n').trim();
+                    } else {
+                        final_input = firstLine;
+                    }
+                }
+            }
+
+            if (final_input === null) continue;
+
+            // --- End of Input Logic --- //
 
             if (state.is_confirming) {
                 state.is_confirming = false;
@@ -119,7 +182,7 @@ async function mainLoop() {
                     continue;
                 }
                 
-                if (input.toLowerCase() === 'y' || input.toLowerCase() === 'yes') {
+                if (final_input.toLowerCase() === 'y') {
                     console.log(chalk.dim('User approved. Executing tool...'));
                     const function_name = tool_call.function.name;
                     const function_args = JSON.parse(tool_call.function.arguments);
@@ -176,24 +239,8 @@ async function mainLoop() {
                         console.log(chalk.green('Banjin: ') + denial_response.content);
                     }
                 }
-            } else if (input.startsWith('/')) {
-                const shouldExit = await handleSlashCommand(state, input);
-                if (shouldExit) {
-                    console.log(chalk.yellow('\nGoodbye!'));
-                    break;
-                }
-            } else if (input.startsWith('.')) {
-                // Support dot-prefixed local commands (e.g. .exit) that won't be sent to the LLM.
-                // Map ".<cmd>" to "/<cmd>" and reuse existing slash-command handler.
-                const mapped = '/' + input.slice(1).trim();
-                const shouldExit = await handleSlashCommand(state, mapped);
-                if (shouldExit) {
-                    // Print a friendly message when exiting via local dot-command
-                    console.log(chalk.yellow('\nGoodbye!'));
-                    break;
-                }
-            } else if (input) {
-                state.conversation.push({ role: 'user', content: input });
+            } else if (final_input) { // This block now only handles sending the final input to the LLM
+                state.conversation.push({ role: 'user', content: final_input });
                 
                 const spinner = ora({ text: 'Waiting for LLM...', spinner: 'dots' });
                 spinner.info(chalk.dim('(press ESC to cancel)'));
