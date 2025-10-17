@@ -91,6 +91,11 @@ Banjin supports slash commands (e.g., `/help`) for direct instructions. You can 
   /model-reset         - Reset model to the value from config file
   /temp-reset          - Reset temperature to the value from config file
 
+  **Interface:**
+  /mode <line|editor|multiline>     - Change the input mode for the current session
+  /output [markdown|text] [--save]  - Show or set output format; use --save to persist to config
+  /output-reset                     - Reset output format to default from config
+
   **Connections & Files:**
   /status              - Show current SSH connection status
   /connect <alias|user@host> - Connect to a server via alias or direct connection
@@ -111,6 +116,21 @@ Banjin supports slash commands (e.g., `/help`) for direct instructions. You can 
   /update              - Check for application updates
 
 </details>
+
+## Output formatting (Markdown vs Text) 🖨️
+
+By default, Banjin displays responses as plain text for maximum compatibility.
+
+- Session toggle:
+  - Use `/output markdown` to enable Markdown rendering for the current session
+  - Use `/output text` to switch back to plain text
+  - Use `/output-reset` to reset to your config default
+- Persist preference:
+  - Use `/output markdown --save` (or `--save` with `text`) to write your preference to `~/.banjin/config.yaml`
+  - The setting is stored at `cli.output_format` and can be `"text"` (default) or `"markdown"`
+
+When Markdown is enabled, Banjin uses the marked + marked-terminal stack to render headings, lists, code blocks, tables, and links more readably in your terminal. If the renderer packages are unavailable for any reason, Banjin will gracefully fall back to plain text.
+
 
 ## Development 👨‍💻
 
