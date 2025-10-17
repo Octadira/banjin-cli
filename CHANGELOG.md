@@ -6,6 +6,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.4] - 2025-10-17
+
+### Added
+- **Output formatting commands**: New `/output [markdown|text] [--save]` command to toggle between plain text and Markdown rendering in the terminal.
+- **Output format reset**: New `/output-reset` command to reset output format to config default.
+- **Markdown rendering**: Integrated `marked` and `marked-terminal` for beautiful Markdown output in terminal (headings, lists, code blocks, tables, links).
+- **CLI settings preservation**: Config updates now preserve both `cli.output_format` and `cli.input_mode` user preferences.
+- Added `output_format` setting to `config.example.yaml` with documentation.
+
+### Fixed
+- **Editor mode bug**: Fixed issue where editor mode would submit messages even when closing without saving. Now treats no-save/no-change as cancel.
+- **Test artifacts in package**: Excluded `src/test/**` from build output to keep published package clean.
+
+### Changed
+- **Default output format**: Changed default from `markdown` to `text` for maximum compatibility.
+- **Dependency management**: Added `marked@11.2.0` and `marked-terminal@6.2.0` as dependencies (auto-install with package updates).
+- **Code organization**: Extracted terminal rendering logic to separate `terminal-render.ts` module for better maintainability.
+- Updated README with comprehensive output formatting documentation.
+
+### Internal
+- Added chalk mock for Jest to avoid ESM import issues in tests.
+- Added TypeScript ambient declarations for marked packages.
+- Improved test coverage for terminal rendering.
+
 ## [1.5.3] - 2025-10-17
 
 ### Added
