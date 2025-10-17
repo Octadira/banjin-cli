@@ -154,7 +154,23 @@ async function mainLoop() {
                 } else if (firstLine) {
                     const inputMode = state.session_config.cli?.input_mode || 'line';
                     if (inputMode === 'editor') {
-                        final_input = await editor({ message: 'Opening editor... (save and close to submit)', default: firstLine });
+                        try {
+                            const edited = await editor({ message: 'Opening editor... (save and close to submit)', default: firstLine });
+                            // If user closed editor without saving (content unchanged) or content is empty, treat as cancel
+                            if (typeof edited !== 'string') {
+                                console.log(chalk.yellow('\nCancelled.'));
+                                continue;
+                            }
+                            const trimmed = edited.trim();
+                            if (edited === firstLine || trimmed.length === 0) {
+                                console.log(chalk.yellow('\nCancelled (editor closed without changes).'));
+                                continue;
+                            }
+                            final_input = edited;
+                        } catch (e) {
+                            console.log(chalk.yellow('\nCancelled.'));
+                            continue;
+                        }
                     } else if (inputMode === 'multiline') {
                         const restOfInput = await getMultilineInput();
                         if (restOfInput === null) {
