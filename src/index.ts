@@ -17,6 +17,31 @@ const pkg = require('../package.json');
 
 import ora from 'ora';
 
+// Render Markdown nicely in the terminal (fallback to plain text if deps missing)
+function renderForTerminal(state: AppState, text: string): string {
+    try {
+        const preferred = state.session_config?.cli?.output_format || 'markdown';
+        if (preferred !== 'markdown') return text;
+        // Lazy-require to avoid hard fail if packages are not available
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { marked } = require('marked');
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const TerminalRenderer = require('marked-terminal');
+        marked.setOptions({
+            // @ts-ignore - runtime option for renderer
+            renderer: new TerminalRenderer({
+                reflowText: true,
+                width: process.stdout.columns || 100,
+                tab: 2,
+                emoji: true,
+                showSectionPrefix: false,
+            }),
+        });
+        return marked(text);
+    } catch (e) {
+        return text;
+    }
+}
 // Helper function for the 'multiline' input mode
 function getMultilineInput(): Promise<string | null> {
     return new Promise((resolve) => {
@@ -236,7 +261,8 @@ async function mainLoop() {
                                 console.log(chalk.bold.cyan(tool_name));
                                 console.log(chalk.dim(tool_args));
                             } else if (post_tool_llm_response.content) {
-                                console.log(chalk.green('Banjin: ') + post_tool_llm_response.content);
+                                const rendered = renderForTerminal(state, post_tool_llm_response.content);
+                                console.log(chalk.green('Banjin:') + '\n' + rendered);
                             }
                         }
                     } else {
@@ -252,7 +278,8 @@ async function mainLoop() {
                     });
                     const denial_response = await callLlmApi(state);
                     if (denial_response && denial_response.content) {
-                        console.log(chalk.green('Banjin: ') + denial_response.content);
+                        const rendered = renderForTerminal(state, denial_response.content);
+                        console.log(chalk.green('Banjin:') + '\n' + rendered);
                     }
                 }
             } else if (final_input) { // This block now only handles sending the final input to the LLM
@@ -316,7 +343,8 @@ async function mainLoop() {
                             console.log(chalk.dim(tool_args));
 
                         } else if (response_message.content) {
-                            console.log(chalk.green('Banjin: ') + response_message.content);
+                            const rendered = renderForTerminal(state, response_message.content);
+                            console.log(chalk.green('Banjin:') + '\n' + rendered);
                         }
                     }
                 } catch (e) {
