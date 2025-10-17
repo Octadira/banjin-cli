@@ -16,32 +16,10 @@ import { notifyOnUpdate } from './update';
 const pkg = require('../package.json');
 
 import ora from 'ora';
+import { ensureMarkdownRenderer, renderForTerminal } from './terminal-render';
 
 // Render Markdown nicely in the terminal (fallback to plain text if deps missing)
-function renderForTerminal(state: AppState, text: string): string {
-    try {
-        const preferred = state.session_config?.cli?.output_format || 'markdown';
-        if (preferred !== 'markdown') return text;
-        // Lazy-require to avoid hard fail if packages are not available
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { marked } = require('marked');
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const TerminalRenderer = require('marked-terminal');
-        marked.setOptions({
-            // @ts-ignore - runtime option for renderer
-            renderer: new TerminalRenderer({
-                reflowText: true,
-                width: process.stdout.columns || 100,
-                tab: 2,
-                emoji: true,
-                showSectionPrefix: false,
-            }),
-        });
-        return marked(text);
-    } catch (e) {
-        return text;
-    }
-}
+export { renderForTerminal };
 // Helper function for the 'multiline' input mode
 function getMultilineInput(): Promise<string | null> {
     return new Promise((resolve) => {
@@ -138,6 +116,11 @@ async function mainLoop() {
 
     const state: AppState | null = await loadInitialState();
     if (!state) return;
+
+    // Prepare Markdown renderer if user prefers markdown
+    if (state.session_config?.cli?.output_format === 'markdown') {
+        await ensureMarkdownRenderer();
+    }
 
     await checkContextUpdate(state);
 
