@@ -51,26 +51,38 @@ async function syncTemplates(configDir: string, options: { promptContext: boolea
     // Preserve apiKey and CLI settings when updating config.yaml
     if (fs.existsSync(exampleConfigPath)) {
         const cfgTarget = path.join(configDir, 'config.yaml');
-        let existingApiKey: string | undefined;
+        let existingLlm: { apiKey?: string; model?: string; temperature?: number; baseUrl?: string } = {};
         let existingCli: { output_format?: string; input_mode?: string } = {};
         try {
             if (fs.existsSync(cfgTarget)) {
                 const oldYaml = fs.readFileSync(cfgTarget, 'utf8');
                 const oldConf = yaml.parse(oldYaml) || {};
-                existingApiKey = oldConf?.llm?.apiKey;
+                existingLlm = oldConf?.llm || {};
                 existingCli = oldConf?.cli || {};
             }
         } catch {}
 
-        // Copy template, then re-inject apiKey if present
+        // Copy template, then re-inject user's LLM and CLI settings
         copyWithBackup(exampleConfigPath, cfgTarget);
         try {
             const newYaml = fs.readFileSync(cfgTarget, 'utf8');
             const newConf = yaml.parse(newYaml) || {};
             if (!newConf.llm) newConf.llm = {};
-            if (existingApiKey && existingApiKey !== 'YOUR_API_KEY_HERE') {
-                newConf.llm.apiKey = existingApiKey;
+            
+            // Preserve all LLM settings if they existed and are not default placeholders
+            if (existingLlm.apiKey && existingLlm.apiKey !== 'YOUR_API_KEY_HERE') {
+                newConf.llm.apiKey = existingLlm.apiKey;
             }
+            if (typeof existingLlm.model === 'string' && existingLlm.model !== '') {
+                newConf.llm.model = existingLlm.model;
+            }
+            if (typeof existingLlm.temperature === 'number') {
+                newConf.llm.temperature = existingLlm.temperature;
+            }
+            if (typeof existingLlm.baseUrl === 'string' && existingLlm.baseUrl !== '') {
+                newConf.llm.baseUrl = existingLlm.baseUrl;
+            }
+            
             // Preserve CLI settings if they existed
             if (!newConf.cli) newConf.cli = {};
             if (typeof existingCli.output_format === 'string') {
