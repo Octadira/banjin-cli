@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.5.6] - 2025-10-17
 
 ### Added
 - **Tool execution cancellation**: Press ESC during tool execution to cancel long-running or stuck operations.
@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Terminal state bug**: Fixed issue where pressing ESC during tool execution left terminal in raw mode, preventing proper exit.
 - **API 413 errors**: Commands producing massive output (e.g., `find /`) no longer cause payload too large errors. Instead, they return helpful guidance for writing better commands.
+- **Exit behavior**: `/exit` command now properly cleans up terminal state and exits immediately without requiring Ctrl+C.
 
 ## [1.5.5] - 2025-10-17
 
