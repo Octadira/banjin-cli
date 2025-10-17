@@ -1,5 +1,9 @@
 import * as tools from './tools';
 import { AppState } from './config';
+import * as path from 'path';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as configMod from './config';
 
 // Mock the AppState
 const mockState: AppState = {
@@ -194,5 +198,79 @@ describe('get_service_status', () => {
 
         expect(parsedResult.status).toBe('unknown');
         expect(parsedResult.status_details).toContain('systemctl command not found');
+    });
+});
+
+describe('first-run setup', () => {
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), 'banjin-test-'));
+    const cwd = process.cwd();
+
+    afterAll(() => {
+        try { fs.rmSync(tmpBase, { recursive: true, force: true }); } catch {}
+        process.chdir(cwd);
+    });
+
+    it('runs setup when ~/.banjin exists without config.yaml', async () => {
+        // Simulate a home directory with .banjin but missing config.yaml
+        const fakeHome = path.join(tmpBase, 'home');
+        const fakeBanjin = path.join(fakeHome, '.banjin');
+        fs.mkdirSync(fakeBanjin, { recursive: true });
+
+        // Monkey-patch os.homedir during this test
+        const realHomedir = os.homedir;
+        // @ts-ignore
+        os.homedir = () => fakeHome;
+
+        // Spy on inquirer confirmation to auto-accept
+        jest.spyOn(require('@inquirer/confirm'), 'default').mockResolvedValue(true);
+
+        const state = await (configMod as any).loadInitialState();
+
+        // Restore homedir
+        // @ts-ignore
+        os.homedir = realHomedir;
+
+        expect(state).not.toBeNull();
+        const createdConfig = path.join(fakeBanjin, 'config.yaml');
+        const createdMcp = path.join(fakeBanjin, 'mcp-servers.json');
+        const createdSsh = path.join(fakeBanjin, 'ssh-servers.json');
+        expect(fs.existsSync(createdConfig)).toBe(true);
+        expect(fs.existsSync(createdMcp)).toBe(true);
+        expect(fs.existsSync(createdSsh)).toBe(true);
+    });
+
+    it('overwrites config.yaml preserving apiKey and prompts for context.md', async () => {
+        const fakeHome = path.join(tmpBase, 'home2');
+        const fakeBanjin = path.join(fakeHome, '.banjin');
+        fs.mkdirSync(fakeBanjin, { recursive: true });
+
+        // Seed existing files to be overwritten
+    const userConfig = `llm:\n  baseUrl: 'https://example.com'\n  model: 'x'\n  temperature: 0.1\n  apiKey: 'KEEP'\n`;
+        fs.writeFileSync(path.join(fakeBanjin, 'config.yaml'), userConfig, 'utf8');
+    fs.writeFileSync(path.join(fakeBanjin, 'context.md'), 'user context', 'utf8');
+        fs.writeFileSync(path.join(fakeBanjin, 'last-synced-version'), '0.0.0', 'utf8');
+
+        // Mock homedir
+        const realHomedir = os.homedir;
+        // @ts-ignore
+        os.homedir = () => fakeHome;
+
+    // Accept context overwrite prompt
+    jest.spyOn(require('@inquirer/confirm'), 'default').mockResolvedValue(true);
+
+        // loadInitialState should detect version change and sync templates
+        const state = await (configMod as any).loadInitialState();
+
+        // Restore homedir
+        // @ts-ignore
+        os.homedir = realHomedir;
+
+        expect(state).not.toBeNull();
+        const cfgPath = path.join(fakeBanjin, 'config.yaml');
+        const ctxPath = path.join(fakeBanjin, 'context.md');
+        const backups = fs.readdirSync(fakeBanjin).filter(f => f.startsWith('config.yaml.bak-') || f.startsWith('context.md.bak-'));
+        expect(backups.length).toBeGreaterThanOrEqual(1);
+        const cfgContent = fs.readFileSync(cfgPath, 'utf8');
+        expect(cfgContent).toContain('apiKey: KEEP');
     });
 });

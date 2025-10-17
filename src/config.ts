@@ -3,7 +3,8 @@ import * as path from 'path';
 import * as os from 'os';
 import * as yaml from 'yaml';
 import chalk from 'chalk';
-import inquirer from 'inquirer';
+import confirm from '@inquirer/confirm';
+const pkg = require('../package.json');
 
 export interface SSHState {
     client: any; // ssh2 client
@@ -26,26 +27,94 @@ export interface AppState {
     mcp_successful_servers: string[];
 }
 
+function safeTimestamp(): string {
+    return new Date().toISOString().replace(/[:]/g, '-');
+}
+
+function copyWithBackup(src: string, dest: string) {
+    try {
+        if (fs.existsSync(dest)) {
+            const backupPath = `${dest}.bak-${safeTimestamp()}`;
+            fs.renameSync(dest, backupPath);
+            console.log(chalk.dim(`Backup created: ${backupPath}`));
+        }
+        fs.copyFileSync(src, dest);
+    } catch (e: any) {
+        console.log(chalk.red(`Failed to copy ${path.basename(src)}: ${e.message}`));
+    }
+}
+
+async function syncTemplates(configDir: string, options: { promptContext: boolean }) {
+    const exampleConfigPath = path.join(__dirname, '..', 'config.example.yaml');
+    const contextTemplatePath = path.join(__dirname, '..', 'context.md');
+
+    // Preserve apiKey when updating config.yaml
+    if (fs.existsSync(exampleConfigPath)) {
+        const cfgTarget = path.join(configDir, 'config.yaml');
+        let existingApiKey: string | undefined;
+        try {
+            if (fs.existsSync(cfgTarget)) {
+                const oldYaml = fs.readFileSync(cfgTarget, 'utf8');
+                const oldConf = yaml.parse(oldYaml) || {};
+                existingApiKey = oldConf?.llm?.apiKey;
+            }
+        } catch {}
+
+        // Copy template, then re-inject apiKey if present
+        copyWithBackup(exampleConfigPath, cfgTarget);
+        try {
+            const newYaml = fs.readFileSync(cfgTarget, 'utf8');
+            const newConf = yaml.parse(newYaml) || {};
+            if (existingApiKey && existingApiKey !== 'YOUR_API_KEY_HERE') {
+                if (!newConf.llm) newConf.llm = {};
+                newConf.llm.apiKey = existingApiKey;
+                fs.writeFileSync(cfgTarget, yaml.stringify(newConf));
+            }
+            fs.chmodSync(cfgTarget, 0o600);
+        } catch {}
+    }
+
+    // Prompt before overwriting context.md on updates
+    if (fs.existsSync(contextTemplatePath)) {
+        const ctxTarget = path.join(configDir, 'context.md');
+        let shouldOverwrite = true;
+        if (options.promptContext && fs.existsSync(ctxTarget)) {
+            shouldOverwrite = await confirm({
+                message: 'A new context.md template is available. Overwrite your existing context.md? (Your local changes will be backed up)',
+                default: false,
+            });
+        }
+
+        if (shouldOverwrite) {
+            copyWithBackup(contextTemplatePath, ctxTarget);
+        }
+    }
+
+    // mark version sync (even if user declined context overwrite to avoid repeated prompts)
+    try {
+        fs.writeFileSync(path.join(configDir, 'last-synced-version'), String(pkg.version));
+    } catch {}
+}
+
 export function findConfigPath(): string | null {
     const localPath = path.join(process.cwd(), '.banjin');
-    if (fs.existsSync(localPath)) return localPath;
+    // Treat config as initialized only if config.yaml exists inside the directory
+    if (fs.existsSync(localPath) && fs.existsSync(path.join(localPath, 'config.yaml'))) return localPath;
+
     const globalPath = path.join(os.homedir(), '.banjin');
-    if (fs.existsSync(globalPath)) return globalPath;
+    if (fs.existsSync(globalPath) && fs.existsSync(path.join(globalPath, 'config.yaml'))) return globalPath;
+
     return null;
 }
 
 async function setupConfiguration(): Promise<string | null> {
     console.log(chalk.yellow('Welcome to Banjin! It looks like this is your first time.'));
-    const answers = await inquirer.prompt([
-        {
-            type: 'confirm',
-            name: 'createConfig',
-            message: 'No configuration directory found. Would you like to create one at ~/.banjin?',
-            default: true,
-        },
-    ]);
+    const createConfig = await confirm({
+        message: 'No configuration directory found. Would you like to create one at ~/.banjin?',
+        default: true,
+    });
 
-    if (answers.createConfig) {
+    if (createConfig) {
         const globalPath = path.join(os.homedir(), '.banjin');
         try {
             fs.mkdirSync(globalPath, { recursive: true });
@@ -54,11 +123,26 @@ async function setupConfiguration(): Promise<string | null> {
             const exampleMcpPath = path.join(__dirname, '..', 'mcp-servers.example.json');
             const contextTemplatePath = path.join(__dirname, '..', 'context.md');
 
-            fs.copyFileSync(exampleConfigPath, path.join(globalPath, 'config.yaml'));
+            const cfgTarget = path.join(globalPath, 'config.yaml');
+            fs.copyFileSync(exampleConfigPath, cfgTarget);
+            // Secure the API key file by default
+            try {
+                fs.chmodSync(cfgTarget, 0o600);
+            } catch {}
+
             fs.copyFileSync(exampleMcpPath, path.join(globalPath, 'mcp-servers.json'));
             if (fs.existsSync(contextTemplatePath)) {
                 fs.copyFileSync(contextTemplatePath, path.join(globalPath, 'context.md'));
             }
+
+            // Create empty SSH servers registry if missing
+            const sshServersPath = path.join(globalPath, 'ssh-servers.json');
+            if (!fs.existsSync(sshServersPath)) {
+                fs.writeFileSync(sshServersPath, JSON.stringify({}, null, 2));
+            }
+
+            // Record version sync on install
+            try { fs.writeFileSync(path.join(globalPath, 'last-synced-version'), String(pkg.version)); } catch {}
 
             console.log(chalk.green(`Successfully created configuration at ${globalPath}`));
             console.log(chalk.yellow.bold('IMPORTANT: Please open ~/.banjin/config.yaml and add your API key.'));
@@ -91,6 +175,16 @@ export function loadMcpServers(configPath: string): any {
 export async function loadInitialState(): Promise<AppState | null> {
     let configPath = findConfigPath();
     if (!configPath) {
+        // If ~/.banjin exists but without config.yaml (e.g., created by update cache), run setup
+        const possibleDir = fs.existsSync(path.join(process.cwd(), '.banjin'))
+            ? path.join(process.cwd(), '.banjin')
+            : path.join(os.homedir(), '.banjin');
+        const hasDirNoConfig = fs.existsSync(possibleDir) && !fs.existsSync(path.join(possibleDir, 'config.yaml'));
+
+        if (hasDirNoConfig) {
+            console.log(chalk.yellow('A Banjin directory was found without a config.yaml. Running first-time setup...'));
+        }
+
         configPath = await setupConfiguration();
         if (!configPath) {
             return null;
@@ -98,6 +192,18 @@ export async function loadInitialState(): Promise<AppState | null> {
     }
 
     try {
+        // On every app start, if version changed since last sync, overwrite templates with backups
+        const lastSyncedPath = path.join(configPath, 'last-synced-version');
+        let lastSynced = '';
+        if (fs.existsSync(lastSyncedPath)) {
+            try { lastSynced = fs.readFileSync(lastSyncedPath, 'utf8').trim(); } catch {}
+        }
+
+        if (String(pkg.version) !== lastSynced) {
+            console.log(chalk.dim(`Syncing templates for version ${pkg.version} (previous: ${lastSynced || 'none'})`));
+            await syncTemplates(configPath, { promptContext: true });
+        }
+
         const config = loadConfig(configPath);
         const mcp_servers = loadMcpServers(configPath);
         const loadedContextFiles: string[] = [];

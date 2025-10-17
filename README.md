@@ -11,12 +11,14 @@ Think of it as a junior developer or sysadmin you can chat with, capable of exec
 -   **Remote Operations via SSH ☁️:** Securely connect to any server and instruct the AI to perform tasks, manage files, or run diagnostics directly on the remote machine.
 -   **Intelligent Tool-Based Agent 🧠:** Banjin uses a Large Language Model (LLM) that can reason and decide which tools to use to accomplish your goals.
 -   **Interactive Confirmation ✅:** For safety, Banjin will always show you the exact command or action it intends to perform and ask for your explicit approval before execution.
--   **Extensible with MCP Tools 🔧:** The "Multi-Custom Provider" (MCP) tool system allows you to extend Banjin's capabilities by adding your own tools that can be local scripts or HTTP endpoints for interacting with APIs.
+-   **Extensible with MCP Tools 🔧:** The "Model Context Protocol" (MCP) tool system allows you to extend Banjin's capabilities.
 -   **Context-Aware 📚:** Provide the AI with custom instructions and context through `.md` files, tailoring its behavior and knowledge to your specific project or environment.
 -   **Session Management 💾:** Save, load, and reset conversations to manage different tasks and contexts efficiently.
 -   **Self-Updating 🚀:** Use the `/update` command to easily keep Banjin at the latest version.
 
 ## Installation 🚀
+
+**Prerequisites:** Node.js 20 or higher is required.
 
 ```bash
 npm install -g banjin
@@ -31,6 +33,7 @@ This directory will contain:
 -   `config.yaml`: The main configuration file. **You must edit this file to add your LLM API key.**
 -   `mcp-servers.json`: Configuration for your custom MCP tools.
 -   `context.md`: A file for your global system context and instructions for the AI.
+-   `ssh-servers.json`: A file to store your SSH server aliases and connection details.
 
 **Security Note: 🛡️** Your `config.yaml` contains sensitive API keys. It is highly recommended to secure this file by setting its permissions to be readable only by you (e.g., `chmod 600 ~/.banjin/config.yaml`).
 

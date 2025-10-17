@@ -1,5 +1,19 @@
 llm:
-  baseUrl: https://api.groq.com/openai/v1
-  model: llama3-8b-8192
+  # The base URL of the OpenAI-compatible API endpoint.
+  # For Groq, use: https://api.groq.com/openai/v1
+  baseUrl: "https://api.groq.com/openai/v1"
+  # The model to use for the LLM. 
+  # Recommended for tool use on Groq: llama-3.1-8b-instant or llama-3.3-70b-versatile
+  model: "llama-3.1-8b-instant"
+  # The temperature for the LLM. A higher value makes the output more random.
   temperature: 0.7
-  apiKey: YOUR_API_KEY_HERE
+  # Your API key. This is a required field.
+  apiKey: "YOUR_API_KEY_HERE"
+
+cli:
+  # The input mode for the chat prompt.
+  # Available options: 
+  #   - "line": Single-line input (default).
+  #   - "editor": Opens the default system editor for multi-line input.
+  #   - "multiline": Simple in-terminal multi-line input (end with a double enter).
+  input_mode: "line"

@@ -47,6 +47,9 @@ Available Commands:
   /model-reset         - Reset model to the value from config file
   /temp-reset          - Reset temperature to the value from config file
 
+  Interface:
+  /mode <line|editor|multiline> - Change the input mode for the current session
+
   Connections & Files:
   /status              - Show current SSH connection status
   /connect <alias|user@host> - Connect to a server via alias or direct connection
@@ -203,35 +206,52 @@ Available Commands:
 
         case '/model':
             if (args.length === 0) {
-                console.log(chalk.yellow(`Current model: ${state.session_config.model}`));
+                console.log(chalk.yellow(`Current model: ${state.session_config.llm.model}`));
             } else {
-                state.session_config.model = args.join(' ');
-                console.log(chalk.yellow(`Model for this session set to: ${state.session_config.model}`));
+                state.session_config.llm.model = args.join(' ');
+                console.log(chalk.yellow(`Model for this session set to: ${state.session_config.llm.model}`));
             }
             break;
 
         case '/temp':
             if (args.length === 0) {
-                console.log(chalk.yellow(`Current temperature: ${state.session_config.temperature}`));
+                console.log(chalk.yellow(`Current temperature: ${state.session_config.llm.temperature}`));
             } else {
                 const newTemp = parseFloat(args[0]);
                 if (isNaN(newTemp)) {
                     console.log(chalk.red('Invalid temperature. Please provide a number.'));
                 } else {
-                    state.session_config.temperature = newTemp;
+                    state.session_config.llm.temperature = newTemp;
                     console.log(chalk.yellow(`Temperature for this session set to: ${newTemp}`));
                 }
             }
             break;
 
+        case '/mode':
+            const allowedModes = ['line', 'editor', 'multiline'];
+            if (args.length === 0) {
+                console.log(chalk.yellow(`Current input mode: ${state.session_config.cli?.input_mode || 'line'}`));
+                console.log(chalk.dim(`Available modes: ${allowedModes.join(', ')}`));
+            } else {
+                const newMode = args[0];
+                if (allowedModes.includes(newMode)) {
+                    if (!state.session_config.cli) state.session_config.cli = {};
+                    state.session_config.cli.input_mode = newMode;
+                    console.log(chalk.yellow(`Input mode for this session set to: ${newMode}`));
+                } else {
+                    console.log(chalk.red(`Invalid mode. Please use one of: ${allowedModes.join(', ')}`));
+                }
+            }
+            break;
+
         case '/model-reset':
-            state.session_config.model = state.original_config.model;
-            console.log(chalk.yellow(`Model reset to default: ${state.session_config.model}`));
+            state.session_config.llm.model = state.original_config.llm.model;
+            console.log(chalk.yellow(`Model reset to default: ${state.session_config.llm.model}`));
             break;
 
         case '/temp-reset':
-            state.session_config.temperature = state.original_config.temperature;
-            console.log(chalk.yellow(`Temperature reset to default: ${state.session_config.temperature}`));
+            state.session_config.llm.temperature = state.original_config.llm.temperature;
+            console.log(chalk.yellow(`Temperature reset to default: ${state.session_config.llm.temperature}`));
             break;
 
         case '/chats-list':
