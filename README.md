@@ -95,6 +95,8 @@ Banjin supports slash commands (e.g., `/help`) for direct instructions. You can 
   /mode <line|editor|multiline>     - Change the input mode for the current session
   /output [markdown|text] [--save]  - Show or set output format; use --save to persist to config
   /output-reset                     - Reset output format to default from config
+  /timeout [seconds] [--save]       - Show or set tool execution timeout (0=disabled); use --save to persist
+  /timeout-reset                    - Reset timeout to default from config
 
   **Connections & Files:**
   /status              - Show current SSH connection status
@@ -130,6 +132,24 @@ By default, Banjin displays responses as plain text for maximum compatibility.
   - The setting is stored at `cli.output_format` and can be `"text"` (default) or `"markdown"`
 
 When Markdown is enabled, Banjin uses the marked + marked-terminal stack to render headings, lists, code blocks, tables, and links more readably in your terminal. If the renderer packages are unavailable for any reason, Banjin will gracefully fall back to plain text.
+
+## Tool execution control ⏱️
+
+Banjin provides safety features for long-running or stuck tool executions:
+
+- **Cancel with ESC**: During tool execution, press the ESC key to cancel the operation immediately.
+- **Automatic timeout**: Control how long tools can run before timing out:
+  - Default: 300 seconds (5 minutes) - reasonable for most server admin tasks
+  - Runtime control:
+    - `/timeout` - Show current timeout setting
+    - `/timeout 600` - Set timeout to 10 minutes for current session
+    - `/timeout 0` - Disable timeout (infinite wait)
+    - `/timeout 300 --save` - Set and save to config permanently
+    - `/timeout-reset` - Reset to config default
+  - Config file: Set `cli.tool_timeout` in `~/.banjin/config.yaml`
+  - Timeout is preserved across updates
+
+When a tool times out or is cancelled, Banjin will notify the LLM so it can adjust its approach or suggest alternatives.
 
 
 ## Development 👨‍💻

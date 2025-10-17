@@ -6,6 +6,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Tool execution cancellation**: Press ESC during tool execution to cancel long-running or stuck operations.
+- **Tool execution timeout**: New `cli.tool_timeout` configuration option (default 300 seconds, set to 0 to disable) prevents tools from hanging indefinitely.
+- **Timeout management commands**:
+  - `/timeout [seconds] [--save]` - View or set tool execution timeout with optional config persistence
+  - `/timeout-reset` - Reset timeout to config default
+  - Default timeout of 300 seconds (5 minutes) chosen for typical server administration tasks
+- **Smart output handling**: Commands with excessive output (>50KB) are now handled intelligently with helpful suggestions for better commands instead of causing API errors.
+
+### Changed
+- Tool execution now shows "(press ESC to cancel)" hint for better user awareness.
+- Config preservation now includes `cli.tool_timeout` during updates.
+
+### Fixed
+- **Terminal state bug**: Fixed issue where pressing ESC during tool execution left terminal in raw mode, preventing proper exit.
+- **API 413 errors**: Commands producing massive output (e.g., `find /`) no longer cause payload too large errors. Instead, they return helpful guidance for writing better commands.
+
 ## [1.5.5] - 2025-10-17
 
 ### Fixed

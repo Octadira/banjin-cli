@@ -1,6 +1,7 @@
 import { AppState, loadMcpServers, findConfigPath } from './config';
 import { forceCheckForUpdate } from './update';
 import { loadSshServers, saveSshServers, SshServer } from './ssh-manager';
+import { ensureTerminalCleanState } from './terminal-utils';
 import chalk from 'chalk';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -27,6 +28,7 @@ export async function handleSlashCommand(state: AppState, input: string): Promis
 
     switch (command) {
         case '/exit':
+            ensureTerminalCleanState();
             if (state.ssh.client) state.ssh.client.end();
             return true;
 
@@ -53,6 +55,8 @@ Available Commands:
     /mode <line|editor|multiline>     - Change the input mode for the current session
     /output [markdown|text] [--save]  - Show or set output format; use --save to persist to config
     /output-reset                     - Reset output format to default from config
+    /timeout [seconds] [--save]       - Show or set tool execution timeout (0=disabled); use --save to persist
+    /timeout-reset                    - Reset timeout to default from config
 
   Connections & Files:
     /status              - Show current SSH connection status
@@ -304,6 +308,61 @@ Available Commands:
             state.session_config.llm.temperature = state.original_config.llm.temperature;
             console.log(chalk.yellow(`Temperature reset to default: ${state.session_config.llm.temperature}`));
             break;
+
+        case '/timeout': {
+            if (args.length === 0) {
+                // Display current timeout
+                const currentTimeout = state.session_config?.cli?.tool_timeout ?? 300;
+                const timeoutDisplay = currentTimeout === 0 ? 'disabled (infinite)' : `${currentTimeout} seconds`;
+                console.log(chalk.yellow(`Current tool execution timeout: ${timeoutDisplay}`));
+                console.log(chalk.dim('Usage: /timeout <seconds> [--save]'));
+                console.log(chalk.dim('       /timeout 0            - Disable timeout (infinite wait)'));
+                console.log(chalk.dim('       /timeout 300 --save   - Set to 5 minutes and save to config'));
+                break;
+            }
+
+            const timeoutValue = parseInt(args[0], 10);
+            if (isNaN(timeoutValue) || timeoutValue < 0) {
+                console.log(chalk.red('Invalid timeout value. Must be a non-negative number (0 = disabled).'));
+                break;
+            }
+
+            if (!state.session_config.cli) state.session_config.cli = {};
+            state.session_config.cli.tool_timeout = timeoutValue;
+
+            const displayValue = timeoutValue === 0 ? 'disabled (infinite)' : `${timeoutValue} seconds`;
+            console.log(chalk.green(`Tool timeout set to: ${displayValue}`));
+
+            // Save to config file if --save flag is present
+            if (args.includes('--save')) {
+                try {
+                    const configPath = findConfigPath();
+                    if (configPath) {
+                        const configFile = path.join(configPath, 'config.yaml');
+                        const configContent = fs.readFileSync(configFile, 'utf8');
+                        const config = yaml.parse(configContent);
+                        
+                        if (!config.cli) config.cli = {};
+                        config.cli.tool_timeout = timeoutValue;
+                        
+                        fs.writeFileSync(configFile, yaml.stringify(config));
+                        console.log(chalk.green('✓ Saved to config file'));
+                    }
+                } catch (error: any) {
+                    console.log(chalk.red(`Failed to save to config: ${error.message}`));
+                }
+            }
+            break;
+        }
+
+        case '/timeout-reset': {
+            const defaultTimeout = state.original_config?.cli?.tool_timeout ?? 300;
+            if (!state.session_config.cli) state.session_config.cli = {};
+            state.session_config.cli.tool_timeout = defaultTimeout;
+            const displayValue = defaultTimeout === 0 ? 'disabled (infinite)' : `${defaultTimeout} seconds`;
+            console.log(chalk.yellow(`Tool timeout reset to default: ${displayValue}`));
+            break;
+        }
 
         case '/chats-list':
             listSavedChats();

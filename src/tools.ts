@@ -4,6 +4,64 @@ import { promises as fsPromises } from 'fs';
 import * as path from 'path';
 import { ClientChannel, SFTPWrapper } from 'ssh2';
 
+// Maximum output size to prevent API payload errors (in characters)
+const MAX_OUTPUT_SIZE = 50000; // ~50KB of text
+
+/**
+ * Intelligently handles large output from commands.
+ * For commands that produce massive output, returns a helpful message
+ * instead of truncating blindly.
+ */
+function handleLargeOutput(output: string, command: string[], maxSize: number = MAX_OUTPUT_SIZE): string {
+    if (output.length <= maxSize) {
+        return output;
+    }
+    
+    const lines = output.split('\n');
+    const sizeInKB = Math.round(output.length / 1024);
+    
+    // Detect common problematic commands
+    const cmdStr = command.join(' ');
+    const isRecursiveFind = cmdStr.includes('find /') || cmdStr.includes('find .');
+    const isRecursiveGrep = cmdStr.match(/grep.*-[rR]/);
+    
+    if (isRecursiveFind || isRecursiveGrep) {
+        return `Command output is too large (${sizeInKB}KB, ${lines.length} lines).
+        
+This type of recursive search produces massive output that cannot be processed.
+
+SUGGESTIONS:
+- For file search: Use more specific paths (e.g., 'find /var/log' instead of 'find /')
+- Add filters: Use -name, -type, -maxdepth to limit results
+- For grep: Specify exact directories and use -l to list filenames only
+- Limit output: Add '| head -n 100' to see first 100 lines
+
+Example better commands:
+- find /home/user -name "*.log" -maxdepth 3
+- grep -r "pattern" /var/log --include="*.log" | head -n 50
+- find /etc -name "*.conf" -type f
+
+First 50 lines of output:
+${lines.slice(0, 50).join('\n')}`;
+    }
+    
+    // For other large outputs, show beginning and end with truncation notice
+    const previewLines = 100;
+    const halfPreview = Math.floor(previewLines / 2);
+    
+    return `Command output is large (${sizeInKB}KB, ${lines.length} lines). Showing first and last ${halfPreview} lines:
+
+=== FIRST ${halfPreview} LINES ===
+${lines.slice(0, halfPreview).join('\n')}
+
+... [${lines.length - previewLines} lines omitted] ...
+
+=== LAST ${halfPreview} LINES ===
+${lines.slice(-halfPreview).join('\n')}
+
+TIP: Consider using grep, head, tail, or other filters to reduce output size.`;
+}
+
 // Interface for the structured output of get_disk_usage
 interface DfOutput {
     filesystem: string;
@@ -158,7 +216,7 @@ export async function run_command(state: AppState, args: { cmd: string[] }): Pro
                         if (code !== 0) {
                             resolve(`Remote command failed with exit code ${code}. Error: ${errorOutput.trim() || 'No error output'}`);
                         } else {
-                            resolve(output);
+                            resolve(handleLargeOutput(output, cmd));
                         }
                     }).on('data', (data: Buffer) => {
                         output += data.toString();
@@ -189,7 +247,7 @@ export async function run_command(state: AppState, args: { cmd: string[] }): Pro
                         resolve(`Local command failed with exit code ${code}. Stderr: ${stderr.trim()}`);
                     }
                     else {
-                        resolve(stdout);
+                        resolve(handleLargeOutput(stdout, cmd));
                     }
                 });
 
