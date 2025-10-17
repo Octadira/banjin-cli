@@ -4,8 +4,9 @@
 # Build output
 /dist
 
-# macOS
+# macOS system files
 .DS_Store
+**/.DS_Store
 
 # Configuration
 config.yaml
@@ -23,14 +24,12 @@ chat_*.md
 # Conversation logs
 conversation_log_*.md
 
-# Gemini CLI
-GEMINI.md
+# Banjin local config and cache (all levels)
+.banjin/
+**/.banjin/
 
-# Banjin local config and cache
-/.banjin/
-
-# Private roadmap
-roadmap.dev.md
+# Private documentation and development notes
+/docs-privat/
 
 # Editor settings (do not commit)
 .vscode/
