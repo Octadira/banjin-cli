@@ -48,15 +48,17 @@ async function syncTemplates(configDir: string, options: { promptContext: boolea
     const exampleConfigPath = path.join(__dirname, '..', 'config.example.yaml');
     const contextTemplatePath = path.join(__dirname, '..', 'context.md');
 
-    // Preserve apiKey when updating config.yaml
+    // Preserve apiKey and CLI settings when updating config.yaml
     if (fs.existsSync(exampleConfigPath)) {
         const cfgTarget = path.join(configDir, 'config.yaml');
         let existingApiKey: string | undefined;
+        let existingCli: { output_format?: string; input_mode?: string } = {};
         try {
             if (fs.existsSync(cfgTarget)) {
                 const oldYaml = fs.readFileSync(cfgTarget, 'utf8');
                 const oldConf = yaml.parse(oldYaml) || {};
                 existingApiKey = oldConf?.llm?.apiKey;
+                existingCli = oldConf?.cli || {};
             }
         } catch {}
 
@@ -65,11 +67,19 @@ async function syncTemplates(configDir: string, options: { promptContext: boolea
         try {
             const newYaml = fs.readFileSync(cfgTarget, 'utf8');
             const newConf = yaml.parse(newYaml) || {};
+            if (!newConf.llm) newConf.llm = {};
             if (existingApiKey && existingApiKey !== 'YOUR_API_KEY_HERE') {
-                if (!newConf.llm) newConf.llm = {};
                 newConf.llm.apiKey = existingApiKey;
-                fs.writeFileSync(cfgTarget, yaml.stringify(newConf));
             }
+            // Preserve CLI settings if they existed
+            if (!newConf.cli) newConf.cli = {};
+            if (typeof existingCli.output_format === 'string') {
+                newConf.cli.output_format = existingCli.output_format;
+            }
+            if (typeof existingCli.input_mode === 'string') {
+                newConf.cli.input_mode = existingCli.input_mode;
+            }
+            fs.writeFileSync(cfgTarget, yaml.stringify(newConf));
             fs.chmodSync(cfgTarget, 0o600);
         } catch {}
     }
