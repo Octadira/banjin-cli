@@ -1,35 +1,43 @@
 # Changelog
 
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.5.0] - 2025-10-16
-
-### Fixed
-- Completely refactored the MCP integration to use the official `@modelcontextprotocol/sdk`, resolving persistent discovery and connection errors.
-- Implemented correct discovery for local, command-based MCP servers using `StdioClientTransport`.
-- Resolved an application hang that occurred during MCP discovery when local servers produced banner text on startup.
-- Simplified tool error messages to avoid verbose object dumps in the chat.
+## [1.5.3] - 2025-10-17
 
 ### Added
-- **SSH Session Manager**: A new system for managing SSH connections with aliases.
-  - Added `/add-ssh` command to save connection profiles.
-  - Added `/list-ssh` command to view all saved server aliases.
-  - Added `/rm-ssh` command to delete a saved server profile.
-- **Enhanced `/connect` command**: Now accepts a saved alias for quick connections, in addition to the direct `user@host` format.
-- **MCP Tool Introspection**:
-  - Added `/mcp-tools` command to list all successfully discovered MCP tools, their system names, original names, and servers.
-- **Improved Startup Feedback**:
-  - The application now explicitly lists which MCP servers were loaded successfully.
+- First-run setup now always creates ~/.banjin/config.yaml, mcp-servers.json, context.md, ssh-servers.json, with secure permissions.
+- On every update/install, config.yaml is overwritten from template but preserves your apiKey automatically.
+- On every update, context.md prompts for overwrite (with backup) if a new template is available.
+- MCP debug: improved error reporting and diagnostics for MCP tool discovery failures.
+
+### Fixed
+- Regression: setup now triggers even if ~/.banjin exists but config.yaml is missing.
+- Improved idempotency and safety of config file creation and update.
 
 ### Changed
-- The `README.md` has been updated to document all new commands and features.
+- Internal: setup and update logic refactored for clarity and reliability.
 
 ### Removed
 - Deleted the obsolete `mcp-tools.test.ts` file, which tested the old, non-functional MCP implementation.
 
+
+
+## [1.5.0] - 2025-10-16
+
+### Fixed
+
+### Added
+  - Added `/add-ssh` command to save connection profiles.
+  - Added `/list-ssh` command to view all saved server aliases.
+  - Added `/rm-ssh` command to delete a saved server profile.
+  - Added `/mcp-tools` command to list all successfully discovered MCP tools, their system names, original names, and servers.
+  - The application now explicitly lists which MCP servers were loaded successfully.
+
+### Changed
 ## [1.3.9] - 2025-10-15
 
 ### Security
