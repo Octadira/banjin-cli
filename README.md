@@ -170,31 +170,73 @@ npm install
 npm start
 ```
 
-## Server Profiling & Audit (experimental)
+## Server Profiling & Audit 🔍
 
-Banjin includes experimental structures and commands for server profiling and audit logging. All data is stored locally—no automatic upload or sharing.
+Banjin includes server profiling and audit logging capabilities for sysadmins and developers. All data is stored locally—no automatic upload or sharing.
+
+### Three-Tier Collection Strategy (Phase 3)
+
+**LIGHT mode** (~2 seconds):
+- Basic OS info, RAM, hostname
+- Minimal performance impact
+- Use for: Quick baseline checks
+
+**DEFAULT mode** (~1-2 seconds):
+- Full hardware inventory
+- Top processes, disk usage
+- Security basics (SSH port, firewall)
+- Use for: Regular profiling
+
+**FULL mode** (~5-10 seconds):
+- **Network discovery**: 15+ listening ports, open connections
+- **Security baseline**: Firewall status, SSH config, failed services tracking
+- **Performance metrics**: CPU%, memory usage, load average, process count (LIVE data)
+- **Service health**: Systemd services, failed services, failed logins (1h)
+- **Kernel info**: Full kernel version, boot time
+- Use for: Sysadmin-grade context for LLM analysis
 
 ### Data Structures
 
-**ServerProfile** (full server profile):
+**ServerProfile** (full server profile with FULL mode extensions):
 ```typescript
 {
   id: 'server-01',
   collectedAt: '2025-10-17T19:50:00Z',
-  hardware: {
-    cpu: 'Intel Xeon E5-2670',
-    cores: 16,
-    ram_gb: 64,
-    disk_gb: 2000,
-    disks: [ { mount: '/', size_gb: 500, used_gb: 120 } ]
-  },
-  os: { name: 'Ubuntu', version: '22.04', kernel: '5.15.0-86-generic', arch: 'x86_64' },
-  users: [ { username: 'adrian', uid: 1000, shell: '/bin/bash', home: '/home/adrian' } ],
-  services: [ { name: 'sshd', status: 'active', port: 22 } ],
+  mode: 'full',
+  hardware: { cpu, cores, ram_gb, disk_gb, disks },
+  os: { name, version, kernel, arch },
+  users: [ { username, uid, shell, home } ],
+  services: [ { name, status, port } ],
   network: {
-    hostname: 'server-01',
-    public_ip: '89.123.45.67',
-    interfaces: [ { name: 'eth0', ip: '192.168.1.10', mac: '00:11:22:33:44:55' } ]
+    hostname,
+    public_ip,
+    interfaces: [ { name, ip, mac } ],
+    listening_ports: [ { port, protocol, service } ],  // ✨ NEW: FULL mode only
+    open_connections: number                            // ✨ NEW: FULL mode only
+  },
+  // ✨ NEW FULL Mode Sections:
+  security?: {
+    firewall_status: string,
+    firewall_enabled: boolean,
+    ssh_port: number,
+    ssh_root_login: boolean,
+    failed_services: string[]
+  },
+  performance?: {
+    cpu_usage_percent: number,
+    memory_usage_percent: number,
+    memory_used_gb: number,
+    load_average: { one, five, fifteen },
+    process_count: number
+  },
+  kernel_info?: {
+    kernel_version: string,
+    boot_time: string
+  },
+  recent_alerts?: {
+    error_count_1h: number,
+    failed_services: string[],
+    failed_login_count_1h: number
   },
   tags: ['production'],
   notes: 'Main web server'
@@ -213,11 +255,52 @@ Banjin includes experimental structures and commands for server profiling and au
 }
 ```
 
-### New Commands (stub-only, no side effects)
+### Commands
 
-- `/profile <collect|show|diff|summarize|send>` – server profile operations (display only, no changes)
-- `/audit <show|search|tail>` – audit log operations (display only, no changes)
-- `/storage <stats|prune>` – storage stats and prune simulation (display only, no changes)
+**Profile Commands:**
+- `/profile collect [--light|--full]` – Collect server profile with optional mode (default: DEFAULT)
+- `/profile show [hostname]` – Display saved profile as JSON
+- `/profile summarize [hostname]` – Brief summary with tags and notes
+- `/profile diff <profile1> <profile2>` – Compare two profiles (stub)
+- `/profile send [--dry-run]` – Send profile to external service (stub)
+
+**Audit Commands:**
+- `/audit tail [--lines N] [--host hostname]` – Show last N audit entries
+- `/audit show [--host hostname]` – Show all audit entries
+- `/audit export --format json|csv [--host hostname]` – Export as JSON or CSV
+- `/audit search <pattern> [--host hostname]` – Search audit log (stub)
+
+**Storage Commands:**
+- `/storage <stats|prune>` – Storage statistics and cleanup (stub)
+
+### Example Workflow
+
+```bash
+# Connect to a remote server
+/connect myserver
+
+# Collect full profile (with security & performance analysis)
+/profile collect --full
+
+# View collected data
+/profile show
+
+# Export audit log
+/audit export --format json
+
+# Ask LLM for analysis
+"Analyze this server - suggest security improvements based on the full profile"
+```
+
+### Hybrid Mode: LLM Tool Integration
+
+Banjin uses three intelligent tools for sysadmin recommendations:
+
+1. **`save_profile_notes`** – Auto-save observations to profile (no popup)
+2. **`suggest_profile_update`** – Propose profile improvements with user confirmation (popup yes/no)
+3. **`suggest_action_plan`** – Recommend step-by-step fixes with risk assessment (popup with steps)
+
+The LLM can use these tools to propose improvements, but **all actions require your explicit approval** before execution.
 
 **All data is stored locally under `~/.banjin`. Nothing is sent to any server unless you explicitly implement it.**
 
