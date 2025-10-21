@@ -6,7 +6,7 @@ llm:
   # Recommended for tool use on Groq: llama-3.1-8b-instant or llama-3.3-70b-versatile
   model: "llama-3.1-8b-instant"
   # The temperature for the LLM. A higher value makes the output more random.
-  temperature: 0.7
+  temperature: 0.5
   # Your API key. This is a required field.
   apiKey: "YOUR_API_KEY_HERE"
 
@@ -26,3 +26,44 @@ cli:
   # Set to 0 to disable timeout (wait indefinitely).
   # Default: 300 seconds (5 minutes)
   tool_timeout: 300
+
+  # --- Storage & Retention (planned; not yet active) ---
+  # All data is stored locally under ~/.banjin. No data is sent anywhere unless you explicitly implement it.
+  storage:
+    # Total cap for Banjin local data (profiles + audits + misc), in MB. 0 = unlimited.
+    global_cap_mb: 500
+    # What to do when exceeding caps: "prune_oldest" | "warn_only". Planned default: prune_oldest.
+    on_exceed: "prune_oldest"
+
+  # Profile retention (planned; not yet active)
+  profile:
+    # Keep at most this many profiles per host. 0 = unlimited.
+    max_versions_per_host: 3
+    # Maximum age for profiles in days. 0 = never expire.
+    max_age_days: 30
+
+  # Audit log rotation (planned; not yet active)
+  audit:
+    # Max size per rotated file (MB)
+    max_file_size_mb: 10
+    # Max number of rotated files per host
+    max_files_per_host: 5
+    # Whether to enable audit logging when implemented: "on" | "off". Default off until explicit opt-in.
+    enabled: "off"
+
+  # Unknown hosts policy (planned; not yet active)
+  unknown_hosts:
+    # How to behave when connecting to a host without a known profile:
+    #   - prompt: Ask user each time
+    #   - ephemeral: Collect into memory only, discard on exit
+    #   - skip: Do not collect
+    policy: "prompt"
+
+  # Privacy controls (planned; not yet active)
+  privacy:
+    # Redact outward-facing IPs (e.g., public IP) when collecting summaries.
+    redact_public_ip: true
+    # Redact usernames in summaries (not in raw local logs).
+    redact_usernames_in_summaries: false
+    # Redact absolute paths in summaries (replace with placeholders).
+    redact_paths_in_summaries: false

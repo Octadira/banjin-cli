@@ -62,12 +62,24 @@ function getMultilineInput(): Promise<string | null> {
 
 
 async function checkContextUpdate(state: AppState) {
-    const globalContextPath = path.join(os.homedir(), '.banjin', 'context.md');
+    const home = process.env.HOME || os.homedir();
+    const globalContextPath = path.join(home, '.banjin', 'context.md');
     if (state.configPath !== path.dirname(globalContextPath)) {
         return;
     }
 
-    const templateContextPath = path.join(__dirname, '..', 'context.md');
+    // Resolve template next to package.json or CWD as in config.ts
+    const resolveTemplatePath = (fileName: string) => {
+        const cwdCandidate = path.join(process.cwd(), fileName);
+        if (fs.existsSync(cwdCandidate)) return cwdCandidate;
+        try {
+            const rootDir = path.dirname(require.resolve('../package.json'));
+            const rootCandidate = path.join(rootDir, fileName);
+            if (fs.existsSync(rootCandidate)) return rootCandidate;
+        } catch {}
+        return path.join(__dirname, '..', fileName);
+    };
+    const templateContextPath = resolveTemplatePath('context.md');
 
     if (!fs.existsSync(globalContextPath) || !fs.existsSync(templateContextPath)) {
         return;
@@ -126,7 +138,7 @@ async function mainLoop() {
 
     await checkContextUpdate(state);
 
-    console.log(chalk.green.bold(`Banjin AI Assistant [TS Version v${pkg.version}]. Use /help for commands.`));
+    console.log(chalk.bold.green(`Banjin AI Assistant [TS Version v${pkg.version}]. Use /help for commands.`));
     console.log(chalk.dim(`Context loaded from: ${state.configPath}`));
 
     const discoverySpinner = ora('Discovering MCP tools...').start();
@@ -144,11 +156,11 @@ async function mainLoop() {
             let final_input: string | null = null;
 
             if (state.is_confirming) {
-                const confirmation = await confirm({ message: chalk.yellow.bold('Approve? (y/n)> ') });
+                const confirmation = await confirm({ message: chalk.bold.yellow('Approve? (y/n)> ') });
                 final_input = confirmation ? 'y' : 'n';
             } else {
                 const promptPrefix = state.ssh.host_string
-                    ? chalk.cyan.bold(`[${state.ssh.host_string}]> `)
+                    ? chalk.bold.cyan(`[${state.ssh.host_string}]> `)
                     : chalk.bold('> ');
                 
                 const firstLine = await input({ message: promptPrefix });
