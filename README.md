@@ -9,7 +9,7 @@ Think of it as a junior developer or sysadmin you can chat with, capable of exec
 ## Core Features
 
 -   **Remote Operations via SSH ☁️:** Securely connect to any server and instruct the AI to perform tasks, manage files, or run diagnostics directly on the remote machine.
--   **Intelligent Tool-Based Agent 🧠:** Banjin uses a Large Language Model (LLM) that can reason and decide which tools to use to accomplish your goals.
+-   **Intelligent Tool-Based Agent 🧠:** Banjin uses a Large Language Model (LLMs) that can reason and decide which tools to use to accomplish your goals.
 -   **Interactive Confirmation ✅:** For safety, Banjin will always show you the exact command or action it intends to perform and ask for your explicit approval before execution.
 -   **Extensible with MCP Tools 🔧:** The "Model Context Protocol" (MCP) tool system allows you to extend Banjin's capabilities.
 -   **Context-Aware 📚:** Provide the AI with custom instructions and context through `.md` files, tailoring its behavior and knowledge to your specific project or environment.
@@ -30,14 +30,14 @@ On the first run, Banjin will guide you through creating a global configuration 
 
 This directory will contain:
 
--   `config.yaml`: The main configuration file. **You must edit this file to add your LLM API key.**
+-   `config.yaml`: The main configuration file. **You must edit this file to add your LLMs API key.**
 -   `mcp-servers.json`: Configuration for your custom MCP tools.
 -   `context.md`: A file for your global system context and instructions for the AI.
 -   `ssh-servers.json`: A file to store your SSH server aliases and connection details.
 
 **Security Note: 🛡️** Your `config.yaml` contains sensitive API keys. It is highly recommended to secure this file by setting its permissions to be readable only by you (e.g., `chmod 600 ~/.banjin/config.yaml`).
 
-## LLM Compatibility 🤝
+## LLMs Compatibility 🤝
 
 Banjin is built and tested to work with the high-speed **[Groq](https://groq.com/)** inference engine. It leverages their API for tool-use capabilities.
 
@@ -72,7 +72,7 @@ You define these tools in `mcp-servers.json`. The AI will then be able to see th
 
 ## Commands ❓
 
-Banjin supports slash commands (e.g., `/help`) for direct instructions. You can also use a dot prefix (e.g., `.help`) to prevent the command from being sent to the LLM.
+Banjin supports slash commands (e.g., `/help`) for direct instructions. You can also use a dot prefix (e.g., `.help`) to prevent the command from being sent to the LLMs.
 
 <details>
 <summary>Click to view all commands</summary>
@@ -85,9 +85,9 @@ Banjin supports slash commands (e.g., `/help`) for direct instructions. You can 
   /chats-list          - List saved chat files
   /chats-delete <file> - Delete a saved chat file
 
-  **LLM & Model:**
-  /model <model_name>  - Change the LLM model for this session
-  /temp <0.0-2.0>      - Change the LLM temperature for this session
+  **LLMs & Model:**
+  /model <model_name>  - Change the LLMs model for this session
+  /temp <0.0-2.0>      - Change the LLMs temperature for this session
   /model-reset         - Reset model to the value from config file
   /temp-reset          - Reset temperature to the value from config file
 
@@ -149,7 +149,7 @@ Banjin provides safety features for long-running or stuck tool executions:
   - Config file: Set `cli.tool_timeout` in `~/.banjin/config.yaml`
   - Timeout is preserved across updates
 
-When a tool times out or is cancelled, Banjin will notify the LLM so it can adjust its approach or suggest alternatives.
+When a tool times out or is cancelled, Banjin will notify the LLMs so it can adjust its approach or suggest alternatives.
 
 
 ## Development 👨‍💻
@@ -193,7 +193,7 @@ Banjin includes server profiling and audit logging capabilities for sysadmins an
 - **Performance metrics**: CPU%, memory usage, load average, process count (LIVE data)
 - **Service health**: Systemd services, failed services, failed logins (1h)
 - **Kernel info**: Full kernel version, boot time
-- Use for: Sysadmin-grade context for LLM analysis
+- Use for: Sysadmin-grade context for LLMs analysis
 
 ### Data Structures
 
@@ -288,11 +288,11 @@ Banjin includes server profiling and audit logging capabilities for sysadmins an
 # Export audit log
 /audit export --format json
 
-# Ask LLM for analysis
+# Ask LLMs for analysis
 "Analyze this server - suggest security improvements based on the full profile"
 ```
 
-### Hybrid Mode: LLM Tool Integration
+### Hybrid Mode: LLMs Tool Integration
 
 Banjin uses three intelligent tools for sysadmin recommendations:
 
@@ -300,7 +300,7 @@ Banjin uses three intelligent tools for sysadmin recommendations:
 2. **`suggest_profile_update`** – Propose profile improvements with user confirmation (popup yes/no)
 3. **`suggest_action_plan`** – Recommend step-by-step fixes with risk assessment (popup with steps)
 
-The LLM can use these tools to propose improvements, but **all actions require your explicit approval** before execution.
+The LLMs can use these tools to propose improvements, but **all actions require your explicit approval** before execution.
 
 **All data is stored locally under `~/.banjin`. Nothing is sent to any server unless you explicitly implement it.**
 
