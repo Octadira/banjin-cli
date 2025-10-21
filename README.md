@@ -169,3 +169,58 @@ npm install
 # 4. Run the app locally
 npm start
 ```
+
+## Server Profiling & Audit (experimental)
+
+Banjin includes experimental structures and commands for server profiling and audit logging. All data is stored locally—no automatic upload or sharing.
+
+### Data Structures
+
+**ServerProfile** (full server profile):
+```typescript
+{
+  id: 'server-01',
+  collectedAt: '2025-10-17T19:50:00Z',
+  hardware: {
+    cpu: 'Intel Xeon E5-2670',
+    cores: 16,
+    ram_gb: 64,
+    disk_gb: 2000,
+    disks: [ { mount: '/', size_gb: 500, used_gb: 120 } ]
+  },
+  os: { name: 'Ubuntu', version: '22.04', kernel: '5.15.0-86-generic', arch: 'x86_64' },
+  users: [ { username: 'adrian', uid: 1000, shell: '/bin/bash', home: '/home/adrian' } ],
+  services: [ { name: 'sshd', status: 'active', port: 22 } ],
+  network: {
+    hostname: 'server-01',
+    public_ip: '89.123.45.67',
+    interfaces: [ { name: 'eth0', ip: '192.168.1.10', mac: '00:11:22:33:44:55' } ]
+  },
+  tags: ['production'],
+  notes: 'Main web server'
+}
+```
+
+**ActionLogEntry** (audit log entry):
+```typescript
+{
+  timestamp: '2025-10-17T19:51:00Z',
+  user: 'adrian',
+  action: 'exec',
+  details: 'ssh server-01 "systemctl restart nginx"',
+  status: 'success',
+  error: undefined
+}
+```
+
+### New Commands (stub-only, no side effects)
+
+- `/profile <collect|show|diff|summarize|send>` – server profile operations (display only, no changes)
+- `/audit <show|search|tail>` – audit log operations (display only, no changes)
+- `/storage <stats|prune>` – storage stats and prune simulation (display only, no changes)
+
+**All data is stored locally under `~/.banjin`. Nothing is sent to any server unless you explicitly implement it.**
+
+Limits and policies can be configured in `config.yaml` (see `cli.profile`, `cli.audit`, `cli.storage`, `cli.privacy`).
+
+---

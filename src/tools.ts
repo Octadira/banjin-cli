@@ -3,6 +3,7 @@ import * as subprocess from 'child_process';
 import { promises as fsPromises } from 'fs';
 import * as path from 'path';
 import { ClientChannel, SFTPWrapper } from 'ssh2';
+import confirm from '@inquirer/confirm';
 
 // Maximum output size to prevent API payload errors (in characters)
 const MAX_OUTPUT_SIZE = 50000; // ~50KB of text
@@ -188,6 +189,91 @@ export function getToolDefinitions(state: AppState) {
                 },
             },
         },
+        {
+            type: "function",
+            function: {
+                name: "save_profile_notes",
+                description: "ONLY use this if user explicitly said 'save' or 'record'. Directly saves notes without asking. For normal observations, use suggest_profile_update instead.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        hostname: {
+                            type: "string",
+                            description: "Optional. The server alias or hostname/IP. If omitted, uses current SSH connection."
+                        },
+                        note: {
+                            type: "string",
+                            description: "Optional. An observation to save (e.g., 'Security patches applied successfully')"
+                        },
+                        tags: {
+                            type: "array",
+                            items: { type: "string" },
+                            description: "Optional. Tags to save (e.g., ['updated', 'hardened'])"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            type: "function",
+            function: {
+                name: "suggest_profile_update",
+                description: "DEFAULT tool for recording observations. Suggests notes or tags with user confirmation popup (yes/no). Use for ANY observation, finding, or issue you detect on the server. User sees popup and decides whether to save.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        hostname: {
+                            type: "string",
+                            description: "Optional. The server alias or hostname/IP. If omitted, uses current SSH connection."
+                        },
+                        note: {
+                            type: "string",
+                            description: "Plain language observation (e.g., 'Database requires urgent memory upgrade - currently using 92% of 64GB')"
+                        },
+                        tags: {
+                            type: "array",
+                            items: { type: "string" },
+                            description: "Issue categories (e.g., ['performance', 'critical', 'memory'])"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            type: "function",
+            function: {
+                name: "suggest_action_plan",
+                description: "Propose an action plan for fixing a problem (Scenario 3). Shows detailed plan with risk level. Use when you identify a problem that requires step-by-step remediation. User sees popup and decides whether to approve.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        title: {
+                            type: "string",
+                            description: "Short title (e.g., 'Update system packages', 'Rotate SSH keys', 'Fix disk space issue')"
+                        },
+                        description: {
+                            type: "string",
+                            description: "Plain language explanation of the problem and solution in 1-2 sentences"
+                        },
+                        steps: {
+                            type: "array",
+                            items: { type: "string" },
+                            description: "Numbered list of clear, step-by-step instructions that anyone can follow"
+                        },
+                        estimatedTime: {
+                            type: "string",
+                            description: "How long it will take (e.g., '5 minutes', '30 minutes', '2 hours')"
+                        },
+                        risk: {
+                            type: "string",
+                            enum: ["low", "medium", "high"],
+                            description: "Risk assessment: low=safe, medium=requires attention, high=may cause downtime"
+                        }
+                    },
+                    required: ["title", "description", "steps", "estimatedTime", "risk"]
+                }
+            }
+        }
     ];
 
     return [...core_tools, ...state.dynamic_tool_defs];
@@ -493,7 +579,165 @@ const core_tools: { [key: string]: (state: AppState, args: any) => Promise<strin
     get_service_status,
 };
 
+/**
+ * Profiling and audit tools (built-in)
+ */
+async function get_server_profile(state: AppState, _args: any): Promise<string> {
+    const { loadServerProfile, summarizeProfile } = require('./profiling');
+    const profile = loadServerProfile();
+    if (!profile) {
+        return 'No server profile available. Run /profile collect first.';
+    }
+    return JSON.stringify(profile, null, 2);
+}
+
+async function log_audit_entry(state: AppState, args: any): Promise<string> {
+    const { logAction } = require('./profiling');
+    try {
+        logAction(args.hostname || 'localhost', {
+            user: args.user || 'unknown',
+            host: args.hostname || 'localhost',
+            action: args.action || 'unknown',
+            details: args.details || '',
+            status: args.status || 'unknown'
+        });
+        return 'Audit entry logged.';
+    } catch (error: any) {
+        return `Failed to log audit entry: ${error.message}`;
+    }
+}
+
+
+/**
+ * Scenario 1: Auto-save notes
+ * When LLM says "save this note to profile", immediately save it
+ */
+async function save_profile_notes(state: AppState, args: any): Promise<string> {
+    const { applyProfileSuggestion, createProfileSuggestion } = require('./profiling');
+    try {
+        const hostname = args.hostname || state.ssh?.ssh_alias || state.ssh?.host_string?.split('@')[1] || 'localhost';
+        const note = args.note || '';
+        const tags = args.tags ? (typeof args.tags === 'string' ? args.tags.split(',').map((t: string) => t.trim()) : args.tags) : [];
+        
+        if (!note && (!tags || tags.length === 0)) {
+            return 'Error: provide at least a note or tags to save.';
+        }
+        
+        // Create suggestion then immediately apply
+        const suggestion = createProfileSuggestion(hostname, note, tags, state.configPath);
+        const result = applyProfileSuggestion(suggestion);
+        
+        return `✅ Auto-saved to profile: ${result}`;
+    } catch (error: any) {
+        return `Failed to auto-save profile notes: ${error.message}`;
+    }
+}
+
+/**
+ * Scenario 2: Suggest profile notes (with popup)
+ * LLM detects issue → shows popup (yes/no/edit) → user decides
+ */
+async function suggest_profile_update(state: AppState, args: any): Promise<string> {
+    const { createProfileSuggestion } = require('./profiling');
+    try {
+        const hostname = args.hostname || state.ssh?.ssh_alias || state.ssh?.host_string?.split('@')[1] || 'localhost';
+        const note = args.note || '';
+        const tags = args.tags ? (typeof args.tags === 'string' ? args.tags.split(',').map((t: string) => t.trim()) : args.tags) : [];
+        
+        if (!note && (!tags || tags.length === 0)) {
+            return 'Error: provide at least a note or tags to suggest.';
+        }
+        
+        // Create suggestion and store in state
+        const suggestion = createProfileSuggestion(hostname, note, tags, state.configPath);
+        state.pendingSuggestion = suggestion;
+        
+        // Show popup
+        console.log('\n📋 Profile Update Suggestion:');
+        console.log(`   Server: ${hostname}`);
+        if (suggestion.proposedNote) {
+            console.log(`   💬 Note: "${suggestion.proposedNote}"`);
+        }
+        if (suggestion.proposedTags && suggestion.proposedTags.length > 0) {
+            console.log(`   🏷️  Tags: [${suggestion.proposedTags.join(', ')}]`);
+        }
+        
+        const approved = await confirm({
+            message: 'Apply this suggestion?',
+            default: true
+        });
+        
+        if (approved) {
+            const { applyProfileSuggestion } = require('./profiling');
+            const result = applyProfileSuggestion(suggestion);
+            state.pendingSuggestion = undefined;
+            return `✅ Applied: ${result}`;
+        } else {
+            state.pendingSuggestion = undefined;
+            return '❌ Suggestion rejected.';
+        }
+    } catch (error: any) {
+        return `Failed to process profile suggestion: ${error.message}`;
+    }
+}
+
+/**
+ * Scenario 3: Suggest action plan
+ * LLM detects problem → shows action plan (yes/no) → executes if approved
+ */
+async function suggest_action_plan(state: AppState, args: any): Promise<string> {
+    try {
+        const title = args.title || 'System Action';
+        const description = args.description || '';
+        const steps: string[] = args.steps || [];
+        const estimatedTime = args.estimatedTime || 'unknown';
+        const risk = args.risk || 'medium';
+        
+        if (!description || steps.length === 0) {
+            return 'Error: provide description and at least one step.';
+        }
+        
+        // Show action plan popup
+        console.log('\n🔧 Suggested Action Plan:');
+        console.log(`   Title: ${title}`);
+        console.log(`   Description: ${description}`);
+        console.log(`   Estimated Time: ${estimatedTime}`);
+        console.log(`   Risk Level: ${risk.toUpperCase()}`);
+        console.log(`\n   Steps:`);
+        steps.forEach((step, idx) => {
+            console.log(`   ${idx + 1}. ${step}`);
+        });
+        
+        const approved = await confirm({
+            message: `Execute this ${risk} risk plan?`,
+            default: risk === 'low'
+        });
+        
+        if (approved) {
+            // Store the action plan for potential execution
+            state.pendingActionPlan = {
+                title,
+                description,
+                steps,
+                estimatedTime,
+                risk,
+                status: 'approved'
+            };
+            return `✅ Action plan approved for execution:\n${title}\n${description}`;
+        } else {
+            return '❌ Action plan rejected.';
+        }
+    } catch (error: any) {
+        return `Failed to process action plan: ${error.message}`;
+    }
+}
+
 export const available_tools: { [key:string]: (state: AppState, args: any) => Promise<string> } = {
     ...core_tools,
+    get_server_profile,
+    log_audit_entry,
+    save_profile_notes,
+    suggest_profile_update,
+    suggest_action_plan,
     // ...available_mcp_tools, // This is now handled dynamically
 };

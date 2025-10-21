@@ -8,6 +8,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { Client } from 'ssh2';
 import { spawn } from 'child_process';
+import ora from 'ora';
 
 import * as readlineSync from 'readline-sync';
 import * as yaml from 'yaml';
@@ -76,6 +77,13 @@ Available Commands:
     /help                - Show this help message
     /clear               - Clear the screen
     /update              - Check for application updates
+
+    Profiling & Audit (stubs):
+        /profile <action>    - Server profiling operations (collect/show/diff/summarize/send) [stub only]
+        /audit <action>      - Per-server audit log operations (show/search/tail) [stub only]
+
+    Storage (stubs):
+        /storage <action>    - Storage stats and pruning (stats/prune) [stub only]
 `));
             break;
 
@@ -110,7 +118,8 @@ Available Commands:
             }
             const connectArg = args[0];
             if (connectArg.includes('@')) {
-                // Direct connection
+                // Direct connection (no alias)
+                state.ssh.ssh_alias = null;
                 connectSsh(state, args);
             } else {
                 // Alias connection
@@ -121,6 +130,8 @@ Available Commands:
                     if (server.keyPath) {
                         connectParams.push('-i', server.keyPath);
                     }
+                    // Set alias before connecting
+                    state.ssh.ssh_alias = connectArg;
                     connectSsh(state, connectParams);
                 } else {
                     console.log(chalk.red(`Error: SSH alias '${connectArg}' not found.`));
@@ -134,6 +145,7 @@ Available Commands:
                 state.ssh.client = null;
                 console.log(chalk.yellow(`Disconnected from ${state.ssh.host_string}`));
                 state.ssh.host_string = null;
+                state.ssh.ssh_alias = null;
             } else {
                 console.log(chalk.yellow('Not connected.'));
             }
@@ -402,7 +414,7 @@ Available Commands:
                 const serverName = parts.shift();
                 const originalName = parts.join('_');
 
-                console.log(chalk.cyan.bold(`  Tool: ${fullName}`));
+                console.log(chalk.bold.cyan(`  Tool: ${fullName}`));
                 console.log(chalk.dim(`    - Original Name: ${originalName}`));
                 console.log(chalk.dim(`    - Server: ${serverName}`));
                 console.log(chalk.dim(`    - Description: ${toolDef.function.description || 'N/A'}`));
@@ -448,6 +460,249 @@ Available Commands:
             }
             break;
 
+        // --- Profiling & Audit skeletons (no behavior, documentation only) ---
+        case '/profile': {
+            const sub = args[0];
+            const usage = () => {
+                console.log(chalk.yellow(`\n/profile
+  Usage:
+    /profile collect [--light|--full]   - Collect server profile (facts: OS, hardware, services, etc.)
+    /profile show [<hostname>]          - Display saved profile
+    /profile summarize                  - Show brief summary of profile
+    /profile diff <profile1> <profile2> - Diff two profiles (stub)
+    /profile send [--dry-run]           - Send summary to LLM context (stub)
+
+  Notes:
+    - Profiles saved under ~/.banjin/profiles/
+    - Summary is lightweight and safe for LLM context injection.`));
+            };
+
+            if (!sub || ['help','-h','--help'].includes(sub)) {
+                usage();
+                break;
+            }
+
+            switch (sub) {
+                case 'collect': {
+                    const { collectServerProfile } = require('./profiling');
+                    const spinner = ora('Collecting server profile...').start();
+                    try {
+                        const isLight = args.includes('--light');
+                        const isFull = args.includes('--full');
+                        const result = await collectServerProfile(state, { light: isLight, full: isFull });
+                        spinner.succeed(chalk.green(result));
+                    } catch (e: any) {
+                        spinner.fail(chalk.red(e.message));
+                    }
+                    break;
+                }
+                case 'show': {
+                    try {
+                        const { showProfile } = require('./profiling');
+                        const hostIdx = args.indexOf('--host');
+                        
+                        let hostname: string;
+                        if (hostIdx !== -1 && args[hostIdx + 1]) {
+                            // Format: /profile show --host linode
+                            hostname = args[hostIdx + 1];
+                        } else if (args[1] && !args[1].startsWith('--')) {
+                            // Format: /profile show linode (positional argument)
+                            hostname = args[1];
+                        } else if (state.ssh && state.ssh.client) {
+                            // Use SSH alias if connected via alias, otherwise use IP/hostname
+                            hostname = state.ssh.ssh_alias || (state.ssh.host_string?.split('@')[1] || os.hostname());
+                        } else {
+                            hostname = os.hostname();
+                        }
+                        
+                        console.log(chalk.green(`Server Profile for ${hostname}:`));
+                        console.log(showProfile(hostname, state.configPath));
+                    } catch (e: any) {
+                        console.log(chalk.red(`Error: ${e.message}`));
+                    }
+                    break;
+                }
+                case 'summarize': {
+                    try {
+                        const { loadServerProfile, summarizeProfile } = require('./profiling');
+                        const hostIdx = args.indexOf('--host');
+                        
+                        let hostname: string;
+                        if (hostIdx !== -1 && args[hostIdx + 1]) {
+                            // Format: /profile summarize --host linode
+                            hostname = args[hostIdx + 1];
+                        } else if (args[1] && !args[1].startsWith('--')) {
+                            // Format: /profile summarize linode (positional argument)
+                            hostname = args[1];
+                        } else if (state.ssh && state.ssh.client) {
+                            // Use SSH alias if connected via alias, otherwise use IP/hostname
+                            hostname = state.ssh.ssh_alias || (state.ssh.host_string?.split('@')[1] || os.hostname());
+                        } else {
+                            hostname = os.hostname();
+                        }
+                        
+                        const profile = loadServerProfile(hostname, state.configPath);
+                        if (!profile) {
+                            console.log(chalk.yellow(`No profile found for ${hostname}. Run /profile collect first.`));
+                        } else {
+                            console.log(chalk.green('Profile Summary:'));
+                            console.log(summarizeProfile(profile));
+                        }
+                    } catch (e: any) {
+                        console.log(chalk.red(`Error: ${e.message}`));
+                    }
+                    break;
+                }
+                case 'diff':
+                    console.log(chalk.cyan('[profile:diff] - Stub: diff functionality not yet implemented.'));
+                    break;
+                case 'send':
+                    console.log(chalk.cyan('[profile:send] - Stub: would inject summary into LLM context.'));
+                    break;
+                default:
+                    console.log(chalk.red(`Unknown /profile action: ${sub}`));
+                    usage();
+            }
+            break;
+        }
+
+        case '/audit': {
+            const sub = args[0];
+            const usage = () => {
+                console.log(chalk.yellow(`\n/audit
+  Usage:
+    /audit tail [--lines N] [--host <hostname>]  - Show last N lines of audit log
+    /audit show [--host <hostname>]              - Show all audit log entries
+    /audit search <pattern> [--host <hostname>]  - Search in audit log (stub)
+    /audit export --format json|csv [--host <hostname>]  - Export audit log as JSON or CSV
+
+  Notes:
+    - Audit logs saved under ~/.banjin/audit/<hostname>.jsonl
+    - Each line is a JSON entry with timestamp, user, action, status.`));
+            };
+
+            if (!sub || ['help','-h','--help'].includes(sub)) {
+                usage();
+                break;
+            }
+
+            switch (sub) {
+                case 'tail': {
+                    try {
+                        const { tailAuditLog } = require('./profiling');
+                        const linesIdx = args.indexOf('--lines');
+                        const lines = linesIdx !== -1 && args[linesIdx + 1] ? parseInt(args[linesIdx + 1]) : 20;
+                        const hostIdx = args.indexOf('--host');
+                        
+                        let hostname: string;
+                        if (hostIdx !== -1 && args[hostIdx + 1]) {
+                            hostname = args[hostIdx + 1];
+                        } else if (state.ssh && state.ssh.client) {
+                            // Use SSH alias if connected via alias, otherwise use IP/hostname
+                            hostname = state.ssh.ssh_alias || (state.ssh.host_string?.split('@')[1] || os.hostname());
+                        } else {
+                            hostname = os.hostname();
+                        }
+                        
+                        console.log(chalk.green(`Audit Log (${hostname}) - last ${lines} entries:`));
+                        console.log(chalk.gray(`[Debug: using hostname='${hostname}', configPath='${state.configPath}', ssh_alias='${state.ssh?.ssh_alias || 'null'}']`));
+                        console.log(tailAuditLog(hostname, lines, state.configPath));
+                    } catch (e: any) {
+                        console.log(chalk.red(`Error: ${e.message}`));
+                    }
+                    break;
+                }
+                case 'show': {
+                    try {
+                        const { tailAuditLog } = require('./profiling');
+                        const hostIdx = args.indexOf('--host');
+                        
+                        let hostname: string;
+                        if (hostIdx !== -1 && args[hostIdx + 1]) {
+                            hostname = args[hostIdx + 1];
+                        } else if (state.ssh && state.ssh.client) {
+                            // Use SSH alias if connected via alias, otherwise use IP/hostname
+                            hostname = state.ssh.ssh_alias || (state.ssh.host_string?.split('@')[1] || os.hostname());
+                        } else {
+                            hostname = os.hostname();
+                        }
+                        
+                        console.log(chalk.green(`Audit Log (${hostname}):`));
+                        console.log(tailAuditLog(hostname, 999999, state.configPath));
+                    } catch (e: any) {
+                        console.log(chalk.red(`Error: ${e.message}`));
+                    }
+                    break;
+                }
+                case 'search':
+                    console.log(chalk.cyan('[audit:search] - Stub: search functionality not yet implemented.'));
+                    break;
+                case 'export': {
+                    try {
+                        const { exportAuditLog } = require('./profiling');
+                        const formatIdx = args.indexOf('--format');
+                        const format = (formatIdx !== -1 && args[formatIdx + 1]) ? args[formatIdx + 1] : 'json';
+                        
+                        if (!['json', 'csv'].includes(format)) {
+                            console.log(chalk.red(`Invalid format: ${format}. Use 'json' or 'csv'.`));
+                            break;
+                        }
+                        
+                        const hostIdx = args.indexOf('--host');
+                        let hostname: string;
+                        if (hostIdx !== -1 && args[hostIdx + 1]) {
+                            hostname = args[hostIdx + 1];
+                        } else if (state.ssh && state.ssh.client) {
+                            hostname = state.ssh.ssh_alias || (state.ssh.host_string?.split('@')[1] || os.hostname());
+                        } else {
+                            hostname = os.hostname();
+                        }
+                        
+                        const exported = exportAuditLog(hostname, format as 'json' | 'csv', state.configPath);
+                        console.log(exported);
+                    } catch (e: any) {
+                        console.log(chalk.red(`Error: ${e.message}`));
+                    }
+                    break;
+                }
+                default:
+                    console.log(chalk.red(`Unknown /audit action: ${sub}`));
+                    usage();
+            }
+            break;
+        }
+
+        case '/storage': {
+            const sub = args[0];
+            const usage = () => {
+                console.log(chalk.yellow(`\n/storage (skeleton)
+  Usage:
+    /storage stats                        - Show estimated local storage usage. STUB.
+    /storage prune [--dry-run] [--all|--profiles|--audits]
+                                          - Print what would be pruned. STUB.
+
+  Notes:
+    - Placeholder only; no deletions or writes happen.
+    - Config keys under cli.storage and cli.audit define caps when implemented.`));
+            };
+            if (!sub || ['help','-h','--help'].includes(sub)) {
+                usage();
+                break;
+            }
+            switch (sub) {
+                case 'stats':
+                    console.log(chalk.cyan('[storage:stats] STUB - would show local storage stats. No changes made.'));
+                    break;
+                case 'prune':
+                    console.log(chalk.cyan('[storage:prune] STUB - dry-run only here; nothing deleted.'));
+                    break;
+                default:
+                    console.log(chalk.red(`Unknown /storage action: ${sub}`));
+                    usage();
+            }
+            break;
+        }
+
         default:
             console.log(chalk.red(`Unknown command: ${command}`));
             break;
@@ -491,6 +746,7 @@ async function connectSsh(state: AppState, args: string[]) {
             state.ssh.client.end();
             state.ssh.client = null;
             state.ssh.host_string = null;
+            state.ssh.ssh_alias = null;
             console.log(chalk.yellow(`Connection to ${hostString} ended.`));
         }
     }).on('keyboard-interactive', (name, instructions, instructionsLang, prompts, finish) => {

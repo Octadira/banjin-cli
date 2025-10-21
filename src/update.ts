@@ -20,7 +20,11 @@ interface PackageJson {
     version: string;
 }
 
-const CACHE_FILE = path.join(os.homedir(), '.banjin', 'update-cache.json');
+function getHomeDir(): string {
+    return process.env.HOME || os.homedir();
+}
+
+const CACHE_FILE = path.join(getHomeDir(), '.banjin', 'update-cache.json');
 const CHECK_INTERVAL = 1000 * 60 * 60 * 24; // 1 day
 
 interface Cache {
@@ -31,7 +35,7 @@ interface Cache {
 
 async function getUpdateInfo(force: boolean = false): Promise<BanjinUpdateInfo | null> {
     try {
-        const configDir = path.join(os.homedir(), '.banjin');
+    const configDir = path.join(getHomeDir(), '.banjin');
         if (!fs.existsSync(configDir)) {
             fs.mkdirSync(configDir, { recursive: true });
         }
