@@ -34,6 +34,12 @@ import { handleProfile } from './cmd/profile';
 import { handleAudit } from './cmd/audit';
 import { handleStorage } from './cmd/storage';
 import { handleExec } from './cmd/exec';
+import { handleUpload } from './cmd/upload';
+import { handleDownload } from './cmd/download';
+import { handleWatch } from './cmd/watch';
+import { handleTail } from './cmd/tail';
+import { handleDocker } from './cmd/docker';
+import { handleDbBackup } from './cmd/db-backup';
 
 export async function handleSlashCommand(state: AppState, input: string): Promise<boolean> {
     const parts = input.trim().split(' ');
@@ -108,6 +114,18 @@ export async function handleSlashCommand(state: AppState, input: string): Promis
             return await handleStorage(state, args);
         case '/exec':
             return await handleExec(state, args);
+        case '/upload':
+            return await handleUpload(state, args);
+        case '/download':
+            return await handleDownload(state, args);
+        case '/watch':
+            return await handleWatch(state, args);
+        case '/tail':
+            return await handleTail(state, args);
+        case '/docker':
+            return await handleDocker(state, args);
+        case '/db-backup':
+            return await handleDbBackup(state, args);
         default:
             console.log(`Unknown command: ${command}`);
             return false;

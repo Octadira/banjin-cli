@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Session-based input history**: Added input history navigation with arrow keys (up/down) in line input mode. History is cleared at the start of each session for privacy and freshness.
+- **File transfer commands**: `/upload` and `/download` for secure file transfer between local and remote systems.
+- **Real-time monitoring**: `/watch` command for executing commands at intervals, and `/tail` for monitoring log files in real-time.
+- **Docker management**: `/docker` command with support for container operations (ps, logs, exec, start, stop, restart, rm, rmi, pull, build).
+- **Database backup**: `/db-backup` command supporting MySQL, PostgreSQL, and MongoDB backups with automatic timestamping.
+
+### Changed
+- **Profile command help**: Removed misleading `[--light|--full]` options from `/profile collect` help text since it always performs comprehensive profiling.
 
 ## [1.6.0] - 2025-11-03
 

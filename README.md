@@ -28,6 +28,10 @@ Use at your own risk and always have backups of critical systems.
 -   **Context-Aware 📚:** Provide the AI with custom instructions and context through `.md` files, tailoring its behavior and knowledge to your specific project or environment.
 -   **Session Management 💾:** Save, load, and reset conversations to manage different tasks and contexts efficiently.
 -   **Input History 📝:** Navigate through previous inputs using arrow keys (up/down) in line input mode. History is session-based and resets when you restart Banjin.
+-   **File Transfer 🔄:** Upload and download files securely between local machine and remote servers using `/upload` and `/download` commands.
+-   **Real-time Monitoring 👀:** Watch commands execute repeatedly with `/watch` or monitor log files in real-time with `/tail`.
+-   **Container Management 🐳:** Full Docker container management with `/docker` command supporting ps, logs, exec, start, stop, and more.
+-   **Database Backup 💾:** Automated backups for MySQL, PostgreSQL, and MongoDB databases with `/db-backup`.
 -   **Self-Updating 🚀:** Use the `/update` command to easily keep Banjin at the latest version.
 
 ## Installation 🚀
