@@ -60,6 +60,27 @@ function getMultilineInput(): Promise<string | null> {
     });
 }
 
+// Helper function for input with history
+function getInputWithHistory(message: string, history: string[]): Promise<string> {
+    return new Promise((resolve) => {
+        const rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout,
+        });
+        (rl as any).history = history;
+        rl.setPrompt(message);
+        rl.prompt();
+        rl.on('line', (line) => {
+            rl.close();
+            resolve(line.trim());
+        });
+        rl.on('SIGINT', () => {
+            rl.close();
+            resolve('');
+        });
+    });
+}
+
 
 async function checkContextUpdate(state: AppState) {
     const home = process.env.HOME || os.homedir();
@@ -131,6 +152,13 @@ async function mainLoop() {
     const state: AppState | null = await loadInitialState();
     if (!state) return;
 
+    // Clear input history for this session
+    const historyFile = path.join(state.configPath, 'input_history.txt');
+    if (fs.existsSync(historyFile)) {
+        fs.unlinkSync(historyFile);
+    }
+    let history: string[] = [];
+
     // Prepare Markdown renderer if user prefers markdown
     if (state.session_config?.cli?.output_format === 'markdown') {
         await ensureMarkdownRenderer();
@@ -163,7 +191,10 @@ async function mainLoop() {
                     ? chalk.bold.cyan(`[${state.ssh.host_string}]> `)
                     : chalk.bold('> ');
                 
-                const firstLine = await input({ message: promptPrefix });
+                const inputMode = state.session_config.cli?.input_mode || 'line';
+                const firstLine = inputMode === 'line' 
+                    ? await getInputWithHistory(promptPrefix, history)
+                    : await input({ message: promptPrefix });
 
                 if (firstLine.startsWith('/') || firstLine.startsWith('.')) {
                     const command = firstLine.startsWith('/') ? firstLine : '/' + firstLine.slice(1).trim();
@@ -174,7 +205,15 @@ async function mainLoop() {
                     }
                     continue;
                 } else if (firstLine) {
-                    const inputMode = state.session_config.cli?.input_mode || 'line';
+                    // Add to history if in line mode and not a command
+                    if (inputMode === 'line') {
+                        history.unshift(firstLine);
+                        if (history.length > 1000) {
+                            history = history.slice(0, 1000);
+                        }
+                        fs.writeFileSync(historyFile, history.join('\n'), 'utf8');
+                    }
+                    
                     if (inputMode === 'editor') {
                         try {
                             const edited = await editor({ message: 'Opening editor... (save and close to submit)', default: firstLine });
