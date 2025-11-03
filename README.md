@@ -27,6 +27,7 @@ Use at your own risk and always have backups of critical systems.
 -   **Extensible with MCP Tools 🔧:** The "Model Context Protocol" (MCP) tool system allows you to extend Banjin's capabilities.
 -   **Context-Aware 📚:** Provide the AI with custom instructions and context through `.md` files, tailoring its behavior and knowledge to your specific project or environment.
 -   **Session Management 💾:** Save, load, and reset conversations to manage different tasks and contexts efficiently.
+-   **Input History 📝:** Navigate through previous inputs using arrow keys (up/down) in line input mode. History is session-based and resets when you restart Banjin.
 -   **Self-Updating 🚀:** Use the `/update` command to easily keep Banjin at the latest version.
 
 ## Installation 🚀
