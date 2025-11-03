@@ -1,6 +1,6 @@
 {
   "name": "banjin",
-  "version": "1.6.1",
+  "version": "1.6.4",
   "description": "A CLI AI assistant",
   "main": "dist/index.js",
   "bin": {

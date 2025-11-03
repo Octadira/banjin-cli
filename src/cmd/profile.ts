@@ -10,7 +10,7 @@ export async function handleProfile(state: AppState, args: string[]): Promise<bo
     const usage = () => {
         console.log(chalk.yellow(`\n/profile
   Usage:
-    /profile collect [--light|--full]   - Collect server profile (facts: OS, hardware, services, etc.)
+    /profile collect                    - Collect server profile (facts: OS, hardware, services, etc.)
     /profile show [<hostname>]          - Display saved profile
     /profile summarize                  - Show brief summary of profile
     /profile diff <profile1> <profile2> - Diff two profiles (stub)

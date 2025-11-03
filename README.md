@@ -28,6 +28,10 @@ Use at your own risk and always have backups of critical systems.
 -   **Context-Aware 📚:** Provide the AI with custom instructions and context through `.md` files, tailoring its behavior and knowledge to your specific project or environment.
 -   **Session Management 💾:** Save, load, and reset conversations to manage different tasks and contexts efficiently.
 -   **Input History 📝:** Navigate through previous inputs using arrow keys (up/down) in line input mode. History is session-based and resets when you restart Banjin.
+-   **File Transfer 🔄:** Upload and download files securely between local machine and remote servers using `/upload` and `/download` commands.
+-   **Real-time Monitoring 👀:** Watch commands execute repeatedly with `/watch` or monitor log files in real-time with `/tail`.
+-   **Container Management 🐳:** Full Docker container management with `/docker` command supporting ps, logs, exec, start, stop, and more.
+-   **Database Backup 💾:** Automated backups for MySQL, PostgreSQL, and MongoDB databases with `/db-backup`.
 -   **Self-Updating 🚀:** Use the `/update` command to easily keep Banjin at the latest version.
 
 ## Installation 🚀
@@ -201,25 +205,37 @@ Banjin supports slash commands (e.g., `/help`) for direct instructions. You can 
   /timeout [seconds] [--save]       - Show or set tool execution timeout (0=disabled); use --save to persist
   /timeout-reset                    - Reset timeout to default from config
 
-  **Connections & Files:**
-  /status              - Show current SSH connection status
-  /connect <alias|user@host> - Connect to a server via alias or direct connection
-  /disconnect          - Disconnect from the remote server
-  /ls-files [path]     - List files and directories
-  /list-ssh            - List all saved SSH server aliases
-  /add-ssh <alias> <user@host> [-i key_path] - Add or update a saved SSH server
-  /rm-ssh <alias>      - Remove a saved SSH server
+   **Connections & Files:**
+   /status              - Show current SSH connection status
+   /connect <alias|user@host> - Connect to a server via alias or direct connection
+   /disconnect          - Disconnect from the remote server
+   /ls-files [path]     - List files and directories
+   /list-ssh            - List all saved SSH server aliases
+   /add-ssh <alias> <user@host> [-i key_path] - Add or update a saved SSH server
+   /rm-ssh <alias>      - Remove a saved SSH server
+   /upload <local> <remote> - Upload file from local to remote server
+   /download <remote> <local> - Download file from remote server to local
 
   **MCP Tools:**
   /mcp-list            - List available MCP servers from config
   /mcp-tools           - List all discovered tools from loaded MCP servers
   /mcp-reload          - Reload the MCP servers configuration
 
-  **General:**
-  /exec <command>      - Execute local shell command with output display
-  /help                - Show this help message
-  /clear               - Clear the screen
-  /update              - Check for application updates
+   **General:**
+   /exec <command>      - Execute local shell command with output display
+   /help                - Show this help message
+   /clear               - Clear the screen
+   /update              - Check for application updates
+
+   **Monitoring:**
+   /watch <command> [interval] - Execute command repeatedly at intervals (default 2s)
+   /tail <file> [lines]        - Monitor file in real-time (like tail -f)
+
+   **Container Management:**
+   /docker <command> [args] - Docker container operations (ps/logs/exec/start/stop/etc.)
+
+   **Database Operations:**
+   /db-backup <type> [args] - Create database backups (mysql/postgresql/mongodb)
 
 </details>
 
@@ -255,6 +271,153 @@ Banjin provides safety features for long-running or stuck tool executions:
 
 When a tool times out or is cancelled, Banjin will notify the LLMs so it can adjust its approach or suggest alternatives.
 
+## Advanced Commands 💪
+
+Banjin includes powerful sysadmin commands for file management, monitoring, containers, and databases:
+
+### File Transfer
+```bash
+# Upload local file to remote server
+/upload ./config.yaml /etc/myapp/config.yaml
+
+# Download remote file to local
+/download /var/log/nginx/error.log ./nginx-errors.log
+```
+
+### Real-time Monitoring
+```bash
+# Watch system processes every 5 seconds
+/watch "ps aux | grep nginx" 5
+
+# Monitor log file in real-time (shows last 20 lines, then follows)
+/tail /var/log/nginx/access.log 20
+
+# Watch remote command
+/watch "/exec systemctl status nginx" 10
+```
+
+### Docker Management
+```bash
+# List all containers
+/docker ps
+
+# View container logs
+/docker logs myapp
+
+# Execute command in running container
+/docker exec myapp "ls -la /app"
+
+# Start/stop containers
+/docker start nginx
+/docker stop nginx
+/docker restart nginx
+
+# Remove container
+/docker rm old-container
+
+# Pull and build images
+/docker pull nginx:latest
+/docker build . myapp:v1.0
+```
+
+### Database Backups
+```bash
+# MySQL backup
+/db-backup mysql mydatabase root mypassword localhost
+
+# PostgreSQL backup
+/db-backup postgresql mydb postgres localhost
+
+# MongoDB backup (creates compressed archive)
+/db-backup mongodb mydb localhost 27017
+```
+
+All commands work on both local and remote systems (when connected via SSH).
+
+## Security Considerations 🔒
+
+**Important:** These advanced commands have significant security implications. Always understand the risks before use.
+
+### File Transfer Security
+- **✅ Encrypted:** Uses SCP over SSH for secure transfer
+- **⚠️ Path Risks:** Avoid relative paths that could overwrite system files
+- **🛡️ Best Practice:** Use absolute paths and verify destinations
+
+```bash
+# ✅ Safe usage
+/upload ./config/app.yaml /home/user/config/app.yaml
+/download /var/log/nginx/error.log ./server-logs.log
+
+# ❌ Dangerous - avoid these patterns
+/upload ../../../etc/passwd /tmp/backup  # Path traversal
+/download /etc/shadow ./passwords        # Sensitive data
+```
+
+### Monitoring Commands Security
+- **✅ Controlled:** Manual refresh (Enter) and cancellation (Ctrl+C)
+- **⚠️ Resource Usage:** Continuous monitoring can consume system resources
+- **⚠️ Data Exposure:** Log monitoring may reveal sensitive information
+- **🛡️ Best Practice:** Use reasonable intervals and monitor resource usage
+
+```bash
+# ✅ Safe monitoring
+/watch "ps aux | head -10" 5
+/tail /var/log/nginx/access.log 50
+
+# ❌ Resource intensive
+/watch "find / -name '*.log' 2>/dev/null" 1
+/tail /var/log/auth.log  # May expose authentication data
+```
+
+### Docker Management Security
+- **✅ Isolated:** Operations contained within Docker environment
+- **⚠️ Privilege Escalation:** Containers with `--privileged` flag bypass isolation
+- **⚠️ Host Access:** Mounted volumes can access host filesystem
+- **🛡️ Best Practice:** Use non-root containers and verify image sources
+
+```bash
+# ✅ Safe operations
+/docker ps
+/docker logs myapp
+/docker images
+
+# ⚠️ High risk in privileged containers
+/docker exec privileged-container "rm -rf /host/path"
+```
+
+### Database Backup Security
+- **✅ Encrypted Transfer:** SSH encryption for remote backups
+- **⚠️ Credential Exposure:** Passwords visible in command history
+- **⚠️ Large Data Sets:** Backups can consume significant disk space
+- **⚠️ Sensitive Data:** Backups contain potentially sensitive information
+- **🛡️ Best Practice:** Use interactive password prompts, verify storage space
+
+```bash
+# ✅ Safe backup (password prompted interactively)
+/db-backup mysql mydb root localhost
+
+# ❌ Avoid visible passwords
+/db-backup mysql mydb root mysecretpassword localhost
+
+# ✅ Check space before large backups
+# Run: df -h (check available space)
+# Run: ls -la ~/banjin-backups/ (check existing backups)
+```
+
+### General Security Guidelines
+1. **Test First:** Always test commands with non-critical data
+2. **Verify Permissions:** Ensure proper access rights before operations
+3. **Monitor Resources:** Watch system resources during long-running commands
+4. **Clean Up:** Remove temporary files and old backups after use
+5. **Use Secure Connections:** Always use SSH/VPN for remote access
+6. **Audit Actions:** Review logs after sensitive operations
+
+**Risk Level (1-10 scale):**
+- `/upload`/`/download`: 3/10 (Low with proper validation)
+- `/watch`: 4/10 (Depends on monitored command)
+- `/tail`: 5/10 (May expose sensitive logs)
+- `/docker`: 6/10 (Depends on container privileges)
+- `/db-backup`: 7/10 (Handles sensitive data)
 
 ## Development 👨‍💻
 
