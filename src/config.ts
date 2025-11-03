@@ -51,12 +51,36 @@ function resolveTemplatePath(fileName: string): string {
     return relCandidate;
 }
 
-function copyWithBackup(src: string, dest: string) {
+function cleanOldBackups(dest: string) {
+    try {
+        const dir = path.dirname(dest);
+        const base = path.basename(dest);
+        const backups = fs.readdirSync(dir)
+            .filter(f => f.startsWith(`${base}.bak-`))
+            .sort()
+            .reverse(); // newest first
+
+        if (backups.length > 5) {
+            const toDelete = backups.slice(5);
+            for (const oldBackup of toDelete) {
+                fs.unlinkSync(path.join(dir, oldBackup));
+            }
+            console.log(chalk.dim(`Cleaned up ${toDelete.length} old backup(s)`));
+        }
+    } catch (e: any) {
+        // Ignore cleanup errors
+    }
+}
+
+function copyWithBackup(src: string, dest: string, doCleanup: boolean = true) {
     try {
         if (fs.existsSync(dest)) {
             const backupPath = `${dest}.bak-${safeTimestamp()}`;
             fs.renameSync(dest, backupPath);
             console.log(chalk.dim(`Backup created: ${backupPath}`));
+            if (doCleanup) {
+                cleanOldBackups(dest);
+            }
         }
         fs.copyFileSync(src, dest);
     } catch (e: any) {
@@ -84,7 +108,7 @@ async function syncTemplates(configDir: string, options: { promptContext: boolea
 
         if (fs.existsSync(exampleConfigPath)) {
             // Copy template, then re-inject user's LLM and CLI settings
-            copyWithBackup(exampleConfigPath, cfgTarget);
+            copyWithBackup(exampleConfigPath, cfgTarget, false);
             try {
                 const newYaml = fs.readFileSync(cfgTarget, 'utf8');
                 const newConf = yaml.parse(newYaml) || {};
@@ -121,7 +145,7 @@ async function syncTemplates(configDir: string, options: { promptContext: boolea
         } else {
             // Fallback: create a minimal config, preserving existing values
             if (fs.existsSync(cfgTarget)) {
-                copyWithBackup(cfgTarget, `${cfgTarget}.new`);
+                copyWithBackup(cfgTarget, `${cfgTarget}.new`, false);
                 try { fs.renameSync(`${cfgTarget}.new`, cfgTarget); } catch {}
             }
             const minimalConf: any = {
@@ -157,7 +181,7 @@ async function syncTemplates(configDir: string, options: { promptContext: boolea
         }
 
         if (shouldOverwrite) {
-            copyWithBackup(contextTemplatePath, ctxTarget);
+            copyWithBackup(contextTemplatePath, ctxTarget, false);
         }
     }
 

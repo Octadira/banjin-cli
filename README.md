@@ -6,6 +6,19 @@
 
 Think of it as a junior developer or sysadmin you can chat with, capable of executing commands, managing files, and integrating with external services, all while asking for your approval before taking any action.
 
+## ⚠️ Disclaimer
+
+**Banjin is currently in active development.** While we strive for stability and security, this software is provided "as is" without any warranties. We are not responsible for any data loss, system damage, security breaches, or other issues that may arise from using this application.
+
+**Key risks to consider:**
+- **Data Loss:** Backup your important files before using Banjin, especially when working with remote servers or file operations.
+- **Security:** Banjin may execute commands on your behalf. Always review actions before approving them.
+- **API Costs:** Using LLMs can incur costs depending on your provider. Monitor your usage.
+- **Experimental Features:** Some features are still evolving and may change or have bugs.
+- **No Liability:** The developers and contributors are not liable for any damages or losses incurred through the use of this software.
+
+Use at your own risk and always have backups of critical systems.
+
 ## Core Features
 
 -   **Remote Operations via SSH ☁️:** Securely connect to any server and instruct the AI to perform tasks, manage files, or run diagnostics directly on the remote machine.
@@ -37,27 +50,116 @@ This directory will contain:
 
 **Security Note: 🛡️** Your `config.yaml` contains sensitive API keys. It is highly recommended to secure this file by setting its permissions to be readable only by you (e.g., `chmod 600 ~/.banjin/config.yaml`).
 
-## LLMs Compatibility 🤝
+## LLM Compatibility 🤝
 
-Banjin is built and tested to work with the high-speed **[Groq](https://groq.com/)** inference engine. It leverages their API for tool-use capabilities.
+Banjin is built to work with **any OpenAI-compatible API endpoint** that supports tool calling (function calling). It **auto-detects** the provider from your base URL and applies provider-specific configuration automatically.
 
-Theoretically, it should be compatible with any OpenAI-compatible API endpoint that supports tool calling (function calling). However, it has not been formally tested with services other than Groq.
+### Supported Providers
 
-### Compatible Models (via Groq)
+**Tested & Recommended:**
 
-*(Information last updated: 2025-10-14)*
+| Provider | Base URL | Model Format | Notes |
+|----------|----------|--------------|-------|
+| **Groq** ⚡ | `https://api.groq.com/openai/v1` | `llama-3.1-8b-instant` | **Fastest**, recommended for tool use |
+| **OpenRouter** 🌐 | `https://openrouter.ai/api/v1` | `provider/model` (e.g., `meta-llama/llama-3.1-8b-instruct`) | Multi-model aggregator, requires HTTP-Referer header (auto-added) |
+| **Together.AI** ⚙️ | `https://api.together.ai/v1` | `meta-llama/Llama-3-70b-instruct` | Fast open-source models |
+| **Hugging Face** 🤗 | `https://api-inference.huggingface.co/v1` | Standard HF model IDs | Free tier available |
+| **Generic OpenAI-Compatible** | `http://localhost:8000/v1` (e.g., local) | Your model's format | Self-hosted, local LLM servers, vLLM, etc. |
 
-This application requires a model that supports **Tool Use**. Below is a list of models available via Groq that are reported to be compatible.
+### Groq (Recommended)
 
-**Recommended by Groq for Tool Use:**
-- `llama-3.1-8b-instant`
-- `llama-3.3-70b-versatile`
+Fastest inference engine with excellent tool support. Get API key from [groq.com](https://groq.com/).
 
-**Other Compatible Models:**
-- `meta-llama/llama-4-maverick-17b-128e-instruct`
-- `moonshotai/kimi-k2-instruct`
-- `qwen/qwen3-32b`
-- `openai/gpt-oss-120b`
+**Models with tool support:**
+- `llama-3.1-8b-instant` (fast, good for tool use)
+- `llama-3.3-70b-versatile` (powerful, supports complex tool chains)
+
+### OpenRouter
+
+Multi-model platform with access to hundreds of models including GPT-4, Claude, Llama, and more.
+
+**Setup:**
+1. Get API key from [openrouter.ai](https://openrouter.ai/)
+2. Model format: `provider/model` (e.g., `meta-llama/llama-3.1-70b-instruct`, `openai/gpt-4o`)
+3. Note: Banjin **automatically adds required `HTTP-Referer` header** for OpenRouter
+
+**Popular models on OpenRouter:**
+- `openai/gpt-4o` - Most capable
+- `meta-llama/llama-3.1-70b-instruct` - Fast, open-source
+- `anthropic/claude-3.5-sonnet` - Excellent reasoning
+- `openrouter/auto` - Route to best available model
+
+### Together.AI
+
+Fast inference for open-source models.
+
+**Setup:**
+1. Get API key from [together.ai](https://together.ai/)
+2. Standard OpenAI-compatible format
+
+### Self-Hosted / Local
+
+Use with local LLM servers like **vLLM**, **Ollama**, **LM Studio**, etc.
+
+```bash
+# Example: vLLM server running locally
+baseUrl: "http://localhost:8000/v1"
+model: "meta-llama/Llama-2-7b-chat-hf"
+```
+
+### Provider Auto-Detection
+
+Banjin automatically detects your provider from `baseUrl` and applies provider-specific configuration:
+
+- **Groq** → Standard OpenAI headers
+- **OpenRouter** → Adds `HTTP-Referer` header (required) + `X-Title` header
+- **Together.AI** → Standard OpenAI headers
+- **Generic** → Standard OpenAI headers
+
+No manual configuration needed! Just set your `baseUrl` and `apiKey` in `config.yaml`.
+
+### Configuration
+
+Edit `~/.banjin/config.yaml`:
+
+```yaml
+llm:
+  # Use any supported provider's base URL
+  baseUrl: "https://api.groq.com/openai/v1"  # or openrouter.ai, together.ai, etc.
+  
+  # Model name (format depends on provider)
+  model: "llama-3.1-8b-instant"
+  
+  # Your API key
+  apiKey: "YOUR_API_KEY_HERE"
+  
+  # Temperature (0.0-2.0)
+  temperature: 0.5
+```
+
+See `config.example.yaml` for more examples of different providers.
+
+---
+
+## Models and Tool Support
+
+**Tool use (function calling) is required by Banjin.** Below are models known to support tools:
+
+**Groq:**
+- `llama-3.1-8b-instant` ✅
+- `llama-3.3-70b-versatile` ✅
+
+**OpenRouter:**
+- Most models support tools, but some free models may have limitations
+- Check [openrouter.ai/docs](https://openrouter.ai/docs) for model capabilities
+
+**Together.AI:**
+- Most Llama 3 / 3.1 models support tools
+- Check provider docs for latest supported models
+
+**Note:** If your chosen model doesn't support tool calling, Banjin will fail with an error message. Switch to a model with tool support.
+
+---
 
 ## What are MCP Tools? 🛠️
 
@@ -113,6 +215,7 @@ Banjin supports slash commands (e.g., `/help`) for direct instructions. You can 
   /mcp-reload          - Reload the MCP servers configuration
 
   **General:**
+  /exec <command>      - Execute local shell command with output display
   /help                - Show this help message
   /clear               - Clear the screen
   /update              - Check for application updates
@@ -172,37 +275,28 @@ npm start
 
 ## Server Profiling & Audit 🔍
 
-Banjin includes server profiling and audit logging capabilities for sysadmins and developers. All data is stored locally—no automatic upload or sharing.
+Banjin includes comprehensive server profiling and audit logging capabilities for sysadmins and developers. All data is stored locally—no automatic upload or sharing.
 
-### Three-Tier Collection Strategy (Phase 3)
+### Comprehensive Collection Strategy
 
-**LIGHT mode** (~2 seconds):
-- Basic OS info, RAM, hostname
-- Minimal performance impact
-- Use for: Quick baseline checks
+Banjin collects detailed server information including:
+- **Hardware**: CPU, cores, RAM, disk usage, network interfaces
+- **OS & Kernel**: Full OS details, kernel version, uptime, load average
+- **Services**: Running processes, systemd services, failed services
+- **Security**: Firewall status, SSH configuration, failed login attempts
+- **Network**: Listening ports, open connections, routing information
+- **Performance**: Live CPU/memory usage, process counts, disk I/O
+- **Audit Trail**: Complete log of all actions performed
 
-**DEFAULT mode** (~1-2 seconds):
-- Full hardware inventory
-- Top processes, disk usage
-- Security basics (SSH port, firewall)
-- Use for: Regular profiling
-
-**FULL mode** (~5-10 seconds):
-- **Network discovery**: 15+ listening ports, open connections
-- **Security baseline**: Firewall status, SSH config, failed services tracking
-- **Performance metrics**: CPU%, memory usage, load average, process count (LIVE data)
-- **Service health**: Systemd services, failed services, failed logins (1h)
-- **Kernel info**: Full kernel version, boot time
-- Use for: Sysadmin-grade context for LLMs analysis
+Collection takes ~5-10 seconds and provides sysadmin-grade context for LLM analysis.
 
 ### Data Structures
 
-**ServerProfile** (full server profile with FULL mode extensions):
+**ServerProfile** (comprehensive server profile):
 ```typescript
 {
   id: 'server-01',
   collectedAt: '2025-10-17T19:50:00Z',
-  mode: 'full',
   hardware: { cpu, cores, ram_gb, disk_gb, disks },
   os: { name, version, kernel, arch },
   users: [ { username, uid, shell, home } ],
@@ -211,29 +305,28 @@ Banjin includes server profiling and audit logging capabilities for sysadmins an
     hostname,
     public_ip,
     interfaces: [ { name, ip, mac } ],
-    listening_ports: [ { port, protocol, service } ],  // ✨ NEW: FULL mode only
-    open_connections: number                            // ✨ NEW: FULL mode only
+    listening_ports: [ { port, protocol, service } ],
+    open_connections: number
   },
-  // ✨ NEW FULL Mode Sections:
-  security?: {
+  security: {
     firewall_status: string,
     firewall_enabled: boolean,
     ssh_port: number,
     ssh_root_login: boolean,
     failed_services: string[]
   },
-  performance?: {
+  performance: {
     cpu_usage_percent: number,
     memory_usage_percent: number,
     memory_used_gb: number,
     load_average: { one, five, fifteen },
     process_count: number
   },
-  kernel_info?: {
+  kernel_info: {
     kernel_version: string,
     boot_time: string
   },
-  recent_alerts?: {
+  recent_alerts: {
     error_count_1h: number,
     failed_services: string[],
     failed_login_count_1h: number
@@ -258,7 +351,7 @@ Banjin includes server profiling and audit logging capabilities for sysadmins an
 ### Commands
 
 **Profile Commands:**
-- `/profile collect [--light|--full]` – Collect server profile with optional mode (default: DEFAULT)
+- `/profile collect` – Collect comprehensive server profile with hardware, OS, services, security, and performance data
 - `/profile show [hostname]` – Display saved profile as JSON
 - `/profile summarize [hostname]` – Brief summary with tags and notes
 - `/profile diff <profile1> <profile2>` – Compare two profiles (stub)
@@ -279,8 +372,8 @@ Banjin includes server profiling and audit logging capabilities for sysadmins an
 # Connect to a remote server
 /connect myserver
 
-# Collect full profile (with security & performance analysis)
-/profile collect --full
+# Collect comprehensive server profile (with security & performance analysis)
+/profile collect
 
 # View collected data
 /profile show

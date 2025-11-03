@@ -59,6 +59,7 @@ export interface ServerProfile {
     uptime_seconds: number;
     process_count: number;
     process_count_by_user: { [user: string]: number };
+    disk_io?: string;
   };
   /** FULL MODE ONLY - Storage detaliat */
   storage?: {
@@ -70,6 +71,8 @@ export interface ServerProfile {
     kernel_version: string;
     boot_time: string;
     systemd_version?: string;
+    uptime?: string;
+    load_average?: number[];
   };
   /** FULL MODE ONLY - Updates pending */
   pending_updates?: {

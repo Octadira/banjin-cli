@@ -11,15 +11,13 @@ import { run_command } from './tools';
 import { AppState } from './config';
 
 /**
- * Collect lightweight server facts (OS, hardware, services, network, etc.)
+ * Collect comprehensive server facts (OS, hardware, services, network, security, performance, etc.)
  * If SSH connected, collect from remote server. Otherwise, collect locally.
  * Uses SSH alias as profile ID if available, otherwise uses IP/hostname.
- * Options: --light (minimal), --full (comprehensive)
  */
 export async function collectServerProfile(state: AppState, _args: any): Promise<string> {
     try {
-        const isLight = _args?.light === true;
-        const isFull = _args?.full === true;
+        const isFull = true; // Always collect full profile
         
         // Determine if we're collecting locally or remotely
         const isRemote = state.ssh && state.ssh.client;
@@ -70,15 +68,13 @@ export async function collectServerProfile(state: AppState, _args: any): Promise
         } catch {}
 
         // Try to get better OS name via lsb_release (Linux distributions)
-        if (!isLight) {
-            try {
-                const lsbOutput = await run_command(state, { cmd: ['lsb_release', '-d'] });
-                const match = lsbOutput.match(/Description:\s*(.+)/);
-                if (match && match[1]) {
-                    profile.os.name = match[1].trim();
-                }
-            } catch {}
-        }
+        try {
+            const lsbOutput = await run_command(state, { cmd: ['lsb_release', '-d'] });
+            const match = lsbOutput.match(/Description:\s*(.+)/);
+            if (match && match[1]) {
+                profile.os.name = match[1].trim();
+            }
+        } catch {}
 
         try {
             const unameR = await run_command(state, { cmd: ['uname', '-r'] });
@@ -92,19 +88,17 @@ export async function collectServerProfile(state: AppState, _args: any): Promise
         } catch {}
 
         // Try to get CPU info via lscpu or sysctl (remote-friendly)
-        if (!isLight) {
-            try {
-                const lscpuOutput = await run_command(state, { cmd: ['lscpu'] });
-                const cpuLine = lscpuOutput.split('\n').find(l => l.includes('Model name'));
-                if (cpuLine) {
-                    profile.hardware.cpu = cpuLine.split(':')[1]?.trim() || profile.hardware.cpu;
-                }
-                const coresLine = lscpuOutput.split('\n').find(l => l.includes('CPU(s):'));
-                if (coresLine) {
-                    profile.hardware.cores = parseInt(coresLine.split(':')[1]?.trim() || '0') || 0;
-                }
-            } catch {}
-        }
+        try {
+            const lscpuOutput = await run_command(state, { cmd: ['lscpu'] });
+            const cpuLine = lscpuOutput.split('\n').find(l => l.includes('Model name'));
+            if (cpuLine) {
+                profile.hardware.cpu = cpuLine.split(':')[1]?.trim() || profile.hardware.cpu;
+            }
+            const coresLine = lscpuOutput.split('\n').find(l => l.includes('CPU(s):'));
+            if (coresLine) {
+                profile.hardware.cores = parseInt(coresLine.split(':')[1]?.trim() || '0') || 0;
+            }
+        } catch {}
 
         // Try to get RAM info via free -h (remote-friendly)
         try {
@@ -119,23 +113,21 @@ export async function collectServerProfile(state: AppState, _args: any): Promise
             }
         } catch {}
 
-        // Try to get disk info via df (only in full mode)
-        if (!isLight) {
-            try {
-                const dfOutput = await run_command(state, { cmd: ['df', '-h', '-P'] });
-                const lines = dfOutput.split('\n').slice(1);
-                for (const line of lines.slice(0, 5)) {
-                    const parts = line.split(/\s+/);
-                    if (parts.length >= 6) {
-                        profile.hardware.disks.push({
-                            mount: parts[5],
-                            size_gb: parseInt(parts[1]) || 0,
-                            used_gb: parseInt(parts[2]) || 0
-                        });
-                    }
+        // Try to get disk info via df
+        try {
+            const dfOutput = await run_command(state, { cmd: ['df', '-h', '-P'] });
+            const lines = dfOutput.split('\n').slice(1);
+            for (const line of lines.slice(0, 5)) {
+                const parts = line.split(/\s+/);
+                if (parts.length >= 6) {
+                    profile.hardware.disks.push({
+                        mount: parts[5],
+                        size_gb: parseInt(parts[1]) || 0,
+                        used_gb: parseInt(parts[2]) || 0
+                    });
                 }
-            } catch {}
-        }
+            }
+        } catch {}
 
         // Try to get network interfaces (only local)
         if (!isRemote) {
@@ -157,20 +149,18 @@ export async function collectServerProfile(state: AppState, _args: any): Promise
                 }
             } catch {}
         }
-        // Try to get running services (only in full mode)
-        if (!isLight) {
-            try {
-                const servicesOutput = await run_command(state, { cmd: ['ps', 'aux'] });
-                const lines = servicesOutput.split('\n').slice(1, 11);
-                profile.services = lines.map(line => {
-                    const parts = line.split(/\s+/);
-                    return {
-                        name: parts[10] || 'unknown',
-                        status: 'active' as const
-                    };
-                });
-            } catch {}
-        }
+        // Try to get running services
+        try {
+            const servicesOutput = await run_command(state, { cmd: ['ps', 'aux'] });
+            const lines = servicesOutput.split('\n').slice(1, 11);
+            profile.services = lines.map(line => {
+                const parts = line.split(/\s+/);
+                return {
+                    name: parts[10] || 'unknown',
+                    status: 'active' as const
+                };
+            });
+        } catch {}
 
         // ===== FULL MODE EXPANSION =====
         if (isFull) {
@@ -207,12 +197,23 @@ export async function collectServerProfile(state: AppState, _args: any): Promise
                 }
             } catch {}
 
-            // Kernel info
+            // Additional performance data
+            try {
+                if (profile.performance) {
+                    profile.performance.disk_io = 'unknown'; // Placeholder for disk I/O
+                }
+            } catch {}
+
+            // Kernel info and uptime
             try {
                 const unameA = await run_command(state, { cmd: ['uname', '-a'] });
+                const uptimeOutput = await run_command(state, { cmd: ['uptime'] });
+                const loadMatch = uptimeOutput.match(/load average: ([0-9.]+), ([0-9.]+), ([0-9.]+)/);
                 profile.kernel_info = {
                     kernel_version: unameA.trim(),
-                    boot_time: 'unknown'
+                    boot_time: 'unknown',
+                    uptime: uptimeOutput.split(' up ')[1]?.split(',')[0] || 'unknown',
+                    load_average: loadMatch ? [parseFloat(loadMatch[1]), parseFloat(loadMatch[2]), parseFloat(loadMatch[3])] : [0, 0, 0]
                 };
             } catch {}
 
@@ -227,12 +228,10 @@ export async function collectServerProfile(state: AppState, _args: any): Promise
             } catch {}
         }
 
-        // Save profile to state.configPath/profiles/ (not hardcoded ~/.banjin)
-        // Use suffix .light or .full to distinguish between collection types
+        // Save profile to state.configPath/profiles/
         const profilesDir = path.join(state.configPath || path.join(os.homedir(), '.banjin'), 'profiles');
         fs.mkdirSync(profilesDir, { recursive: true });
-        const suffix = isLight ? '.light' : (isFull ? '.full' : '');
-        const profilePath = path.join(profilesDir, `${profile.id}${suffix}.json`);
+        const profilePath = path.join(profilesDir, `${profile.id}.json`);
         fs.writeFileSync(profilePath, JSON.stringify(profile, null, 2));
 
         // Log this action to audit trail
@@ -242,13 +241,12 @@ export async function collectServerProfile(state: AppState, _args: any): Promise
             user: 'system',
             host: profile.id,
             action: 'profile_collected',
-            details: `Profile collected with mode: ${isLight ? 'light' : (isFull ? 'full' : 'default')}`,
+            details: 'Profile collected (full)',
             status: 'success'
         }, state.configPath);
 
-        const modeLabel = isLight ? '[light]' : (isFull ? '[full]' : '[default]');
         const auditPath = path.join(auditDir, `${profile.id}.jsonl`);
-        return `Profile collected ${modeLabel} and saved to ${profilePath}. Audit logged to ${auditPath}`;
+        return `Profile collected and saved to ${profilePath}. Audit logged to ${auditPath}`;
     } catch (error: any) {
         return `Error collecting profile: ${error.message}`;
     }
@@ -256,25 +254,16 @@ export async function collectServerProfile(state: AppState, _args: any): Promise
 
 /**
  * Load server profile from disk
- * Try to load: hostname.light.json, hostname.full.json, hostname.json (in that order)
  */
 export function loadServerProfile(hostname: string = os.hostname(), configPath?: string): ServerProfile | null {
     try {
         const basePath = configPath || path.join(os.homedir(), '.banjin');
         const profilesDir = path.join(basePath, 'profiles');
-        
-        // Try to load in order of preference
-        const candidates = [
-            path.join(profilesDir, `${hostname}.full.json`),
-            path.join(profilesDir, `${hostname}.light.json`),
-            path.join(profilesDir, `${hostname}.json`)
-        ];
-        
-        for (const profilePath of candidates) {
-            if (fs.existsSync(profilePath)) {
-                const data = fs.readFileSync(profilePath, 'utf8');
-                return JSON.parse(data) as ServerProfile;
-            }
+        const profilePath = path.join(profilesDir, `${hostname}.json`);
+
+        if (fs.existsSync(profilePath)) {
+            const data = fs.readFileSync(profilePath, 'utf8');
+            return JSON.parse(data) as ServerProfile;
         }
     } catch {}
     return null;

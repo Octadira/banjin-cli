@@ -6,6 +6,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2025-11-03
+
+### Added
+- **`/exec` command**: New command to execute local shell commands with output display and error handling
+- **`/storage` command**: Implemented real functionality for storage statistics and pruning old files/audit logs
+- **Backup cleanup**: Config files now automatically keep only the 5 most recent backups
+
+### Changed
+- **`/profile` command**: Simplified to always collect comprehensive full profiles (removed light/full modes)
+- **Help text**: Removed "stub" mentions from `/profile` and `/audit` commands
+- **Test coverage**: Increased from 83 to 98 passing tests
+
+### Fixed
+- Various bug fixes and improvements in command implementations
+
 ## [1.5.6] - 2025-10-17
 
 ### Added

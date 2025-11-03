@@ -1,13 +1,44 @@
 llm:
   # The base URL of the OpenAI-compatible API endpoint.
-  # For Groq, use: https://api.groq.com/openai/v1
+  # Banjin auto-detects the provider and applies provider-specific headers/configuration.
+  #
+  # SUPPORTED PROVIDERS:
+  #
+  # 1. GROQ (Recommended - fastest for tool use)
+  #    baseUrl: "https://api.groq.com/openai/v1"
+  #    model: "llama-3.1-8b-instant" or "llama-3.3-70b-versatile"
+  #    Recommended for tool use on Groq: llama-3.1-8b-instant or llama-3.3-70b-versatile
+  #
+  # 2. OPENROUTER (Multi-model aggregator, IMPORTANT: requires HTTP-Referer header)
+  #    baseUrl: "https://openrouter.ai/api/v1"
+  #    model: "meta-llama/llama-3.1-8b-instruct" (use provider/model format)
+  #    Examples: "openai/gpt-4o", "meta-llama/llama-3.1-70b-instruct", "openai/gpt-4-turbo"
+  #    Note: Banjin auto-adds HTTP-Referer and X-Title headers for OpenRouter
+  #
+  # 3. TOGETHER.AI (Fast inference, good for open models)
+  #    baseUrl: "https://api.together.ai/v1"
+  #    model: "meta-llama/Llama-3-70b-instruct"
+  #
+  # 4. HUGGING FACE INFERENCE (Free tier available)
+  #    baseUrl: "https://api-inference.huggingface.co/v1"
+  #    model: "meta-llama/Llama-2-7b-chat-hf"
+  #
+  # 5. GENERIC OPENAI-COMPATIBLE (Self-hosted, local, etc.)
+  #    baseUrl: "http://localhost:8000/v1" (for local LLM servers)
+  #    model: <whatever your server supports>
+  #
   baseUrl: "https://api.groq.com/openai/v1"
-  # The model to use for the LLM. 
+  
+  # The model to use for the LLM.
+  # For tool use (required by Banjin), ensure model supports function calling.
   # Recommended for tool use on Groq: llama-3.1-8b-instant or llama-3.3-70b-versatile
   model: "llama-3.1-8b-instant"
+  
   # The temperature for the LLM. A higher value makes the output more random.
   temperature: 0.5
+  
   # Your API key. This is a required field.
+  # SECURITY: Keep this secret. Never commit config.yaml with real keys to git.
   apiKey: "YOUR_API_KEY_HERE"
 
 cli:

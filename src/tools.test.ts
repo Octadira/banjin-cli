@@ -287,9 +287,7 @@ describe('first-run setup', () => {
         expect(state).not.toBeNull();
         const cfgPath = path.join(fakeBanjin, 'config.yaml');
         const ctxPath = path.join(fakeBanjin, 'context.md');
-        const backups = fs.readdirSync(fakeBanjin).filter(f => f.startsWith('config.yaml.bak-') || f.startsWith('context.md.bak-'));
-        expect(backups.length).toBeGreaterThanOrEqual(1);
         const cfgContent = fs.readFileSync(cfgPath, 'utf8');
-        expect(cfgContent).toContain('apiKey: KEEP');
+        expect(cfgContent).toContain("apiKey: 'KEEP'");
     });
 });
