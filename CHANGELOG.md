@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.6.1] - 2025-11-03
+## [1.6.2] - 2025-11-03
 
 ### Added
 - **Session-based input history**: Added input history navigation with arrow keys (up/down) in line input mode. History is cleared at the start of each session for privacy and freshness.
