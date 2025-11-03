@@ -92,11 +92,15 @@ jest.mock('./update', () => ({
 // Mock profiling
 jest.mock('./profiling', () => ({
     collectServerProfile: jest.fn(),
-    showProfile: jest.fn(),
-    loadServerProfile: jest.fn(),
-    summarizeProfile: jest.fn(),
-    tailAuditLog: jest.fn(() => 'mock audit log'),
-    exportAuditLog: jest.fn(),
+    saveProfile: jest.fn(),
+    loadProfiles: jest.fn(),
+    getAuditLogs: jest.fn(),
+    saveAuditLog: jest.fn(),
+    cleanupOldFiles: jest.fn(),
+}));
+
+jest.mock('./tools', () => ({
+    run_command: jest.fn(),
 }));
 
 // Mock ora
@@ -1125,7 +1129,7 @@ describe('Command Handlers', () => {
 
     describe('handleExec', () => {
         beforeEach(() => {
-            (spawn as jest.Mock).mockClear();
+            jest.clearAllMocks();
         });
 
         it('should show usage error if no args', async () => {
@@ -1135,51 +1139,56 @@ describe('Command Handlers', () => {
             expect(mockConsoleLog).toHaveBeenCalledWith('Usage: /exec <command> [args...]');
         });
 
-        it('should spawn command with args', async () => {
-            const mockChild = {
-                on: jest.fn((event, callback) => {
-                    if (event === 'close') callback(0);
-                }),
-            };
-            (spawn as jest.Mock).mockReturnValue(mockChild);
+        it('should execute command locally when not connected', async () => {
+            const { run_command } = require('./tools');
+            (run_command as jest.Mock).mockResolvedValue('total 0\ndrwxr-xr-x  2 user  group  64 Jan 1 12:00 .');
 
             const result = await handleExec(createMockState(), ['ls', '-la']);
 
             expect(result).toBe(false);
-            expect(spawn).toHaveBeenCalledWith('ls', ['-la'], {
-                stdio: 'inherit',
-                shell: true,
-            });
-            expect(mockConsoleLog).toHaveBeenCalledWith('Executing: ls -la');
+            expect(run_command).toHaveBeenCalledWith(createMockState(), { cmd: ['ls', '-la'] });
+            expect(mockConsoleLog).toHaveBeenCalledWith('Executing locally: ls -la');
+            expect(mockConsoleLog).toHaveBeenCalledWith('total 0\ndrwxr-xr-x  2 user  group  64 Jan 1 12:00 .');
+            expect(mockConsoleLog).toHaveBeenCalledWith('Command completed successfully.');
+        });
+
+        it('should execute command remotely when connected', async () => {
+            const mockState = createMockState();
+            mockState.ssh.host_string = 'user@server';
+
+            const { run_command } = require('./tools');
+            (run_command as jest.Mock).mockResolvedValue('total 0\ndrwxr-xr-x  2 user  group  64 Jan 1 12:00 .');
+
+            const result = await handleExec(mockState, ['ls', '-la']);
+
+            expect(result).toBe(false);
+            expect(run_command).toHaveBeenCalledWith(mockState, { cmd: ['ls', '-la'] });
+            expect(mockConsoleLog).toHaveBeenCalledWith('Executing on user@server: ls -la');
+            expect(mockConsoleLog).toHaveBeenCalledWith('total 0\ndrwxr-xr-x  2 user  group  64 Jan 1 12:00 .');
             expect(mockConsoleLog).toHaveBeenCalledWith('Command completed successfully.');
         });
 
         it('should handle command failure', async () => {
-            const mockChild = {
-                on: jest.fn((event, callback) => {
-                    if (event === 'close') callback(1);
-                }),
-            };
-            (spawn as jest.Mock).mockReturnValue(mockChild);
+            const { run_command } = require('./tools');
+            (run_command as jest.Mock).mockResolvedValue('Local command failed with exit code 1. Stderr: command not found');
 
             const result = await handleExec(createMockState(), ['invalid-command']);
 
             expect(result).toBe(false);
-            expect(mockConsoleLog).toHaveBeenCalledWith('Command failed with exit code 1.');
+            expect(mockConsoleLog).toHaveBeenCalledWith('Executing locally: invalid-command');
+            expect(mockConsoleLog).toHaveBeenCalledWith('Local command failed with exit code 1. Stderr: command not found');
+            expect(mockConsoleLog).toHaveBeenCalledWith('Command execution completed with issues.');
         });
 
-        it('should handle spawn error', async () => {
-            const mockChild = {
-                on: jest.fn((event, callback) => {
-                    if (event === 'error') callback(new Error('Spawn failed'));
-                }),
-            };
-            (spawn as jest.Mock).mockReturnValue(mockChild);
+        it('should handle execution error', async () => {
+            const { run_command } = require('./tools');
+            (run_command as jest.Mock).mockRejectedValue(new Error('Command execution failed'));
 
             const result = await handleExec(createMockState(), ['ls']);
 
             expect(result).toBe(false);
-            expect(mockConsoleLog).toHaveBeenCalledWith('Error executing command: Spawn failed');
+            expect(mockConsoleLog).toHaveBeenCalledWith('Executing locally: ls');
+            expect(mockConsoleLog).toHaveBeenCalledWith('Error executing command: Command execution failed');
         });
     });
 });

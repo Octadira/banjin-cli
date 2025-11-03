@@ -1,37 +1,38 @@
 import { AppState } from '../config';
-import { spawn } from 'child_process';
+import { run_command } from '../tools';
 import chalk from 'chalk';
 
-export async function handleExec(_state: AppState, args: string[]): Promise<boolean> {
+export async function handleExec(state: AppState, args: string[]): Promise<boolean> {
     if (args.length === 0) {
         console.log(chalk.red('Usage: /exec <command> [args...]'));
         console.log(chalk.dim('Example: /exec ls -la'));
         return false;
     }
 
-    const command = args[0];
-    const commandArgs = args.slice(1);
+    const cmd = args; // Pass all args as command array
 
-    console.log(chalk.dim(`Executing: ${command} ${commandArgs.join(' ')}`));
+    // Determine execution context
+    const isRemote = state.ssh.host_string !== null;
+    const context = isRemote ? `on ${state.ssh.host_string}` : 'locally';
 
-    const child = spawn(command, commandArgs, {
-        stdio: 'inherit',
-        shell: true, // Allow shell commands like 'ls -la' or 'echo hello'
-    });
+    console.log(chalk.dim(`Executing ${context}: ${args.join(' ')}`));
 
-    return new Promise((resolve) => {
-        child.on('close', (code) => {
-            if (code === 0) {
-                console.log(chalk.green(`Command completed successfully.`));
-            } else {
-                console.log(chalk.red(`Command failed with exit code ${code}.`));
-            }
-            resolve(false); // Continue the CLI session
-        });
+    try {
+        const result = await run_command(state, { cmd });
 
-        child.on('error', (error) => {
-            console.log(chalk.red(`Error executing command: ${error.message}`));
-            resolve(false);
-        });
-    });
+        // Display the result
+        console.log(result);
+
+        // Check if command was successful (basic check)
+        if (result.includes('failed') || result.includes('Error')) {
+            console.log(chalk.red('Command execution completed with issues.'));
+        } else {
+            console.log(chalk.green('Command completed successfully.'));
+        }
+
+    } catch (error) {
+        console.log(chalk.red(`Error executing command: ${error instanceof Error ? error.message : String(error)}`));
+    }
+
+    return false; // Continue the CLI session
 }
