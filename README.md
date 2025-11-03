@@ -205,25 +205,37 @@ Banjin supports slash commands (e.g., `/help`) for direct instructions. You can 
   /timeout [seconds] [--save]       - Show or set tool execution timeout (0=disabled); use --save to persist
   /timeout-reset                    - Reset timeout to default from config
 
-  **Connections & Files:**
-  /status              - Show current SSH connection status
-  /connect <alias|user@host> - Connect to a server via alias or direct connection
-  /disconnect          - Disconnect from the remote server
-  /ls-files [path]     - List files and directories
-  /list-ssh            - List all saved SSH server aliases
-  /add-ssh <alias> <user@host> [-i key_path] - Add or update a saved SSH server
-  /rm-ssh <alias>      - Remove a saved SSH server
+   **Connections & Files:**
+   /status              - Show current SSH connection status
+   /connect <alias|user@host> - Connect to a server via alias or direct connection
+   /disconnect          - Disconnect from the remote server
+   /ls-files [path]     - List files and directories
+   /list-ssh            - List all saved SSH server aliases
+   /add-ssh <alias> <user@host> [-i key_path] - Add or update a saved SSH server
+   /rm-ssh <alias>      - Remove a saved SSH server
+   /upload <local> <remote> - Upload file from local to remote server
+   /download <remote> <local> - Download file from remote server to local
 
   **MCP Tools:**
   /mcp-list            - List available MCP servers from config
   /mcp-tools           - List all discovered tools from loaded MCP servers
   /mcp-reload          - Reload the MCP servers configuration
 
-  **General:**
-  /exec <command>      - Execute local shell command with output display
-  /help                - Show this help message
-  /clear               - Clear the screen
-  /update              - Check for application updates
+   **General:**
+   /exec <command>      - Execute local shell command with output display
+   /help                - Show this help message
+   /clear               - Clear the screen
+   /update              - Check for application updates
+
+   **Monitoring:**
+   /watch <command> [interval] - Execute command repeatedly at intervals (default 2s)
+   /tail <file> [lines]        - Monitor file in real-time (like tail -f)
+
+   **Container Management:**
+   /docker <command> [args] - Docker container operations (ps/logs/exec/start/stop/etc.)
+
+   **Database Operations:**
+   /db-backup <type> [args] - Create database backups (mysql/postgresql/mongodb)
 
 </details>
 
@@ -259,6 +271,68 @@ Banjin provides safety features for long-running or stuck tool executions:
 
 When a tool times out or is cancelled, Banjin will notify the LLMs so it can adjust its approach or suggest alternatives.
 
+## Advanced Commands 💪
+
+Banjin includes powerful sysadmin commands for file management, monitoring, containers, and databases:
+
+### File Transfer
+```bash
+# Upload local file to remote server
+/upload ./config.yaml /etc/myapp/config.yaml
+
+# Download remote file to local
+/download /var/log/nginx/error.log ./nginx-errors.log
+```
+
+### Real-time Monitoring
+```bash
+# Watch system processes every 5 seconds
+/watch "ps aux | grep nginx" 5
+
+# Monitor log file in real-time (shows last 20 lines, then follows)
+/tail /var/log/nginx/access.log 20
+
+# Watch remote command
+/watch "/exec systemctl status nginx" 10
+```
+
+### Docker Management
+```bash
+# List all containers
+/docker ps
+
+# View container logs
+/docker logs myapp
+
+# Execute command in running container
+/docker exec myapp "ls -la /app"
+
+# Start/stop containers
+/docker start nginx
+/docker stop nginx
+/docker restart nginx
+
+# Remove container
+/docker rm old-container
+
+# Pull and build images
+/docker pull nginx:latest
+/docker build . myapp:v1.0
+```
+
+### Database Backups
+```bash
+# MySQL backup
+/db-backup mysql mydatabase root mypassword localhost
+
+# PostgreSQL backup
+/db-backup postgresql mydb postgres localhost
+
+# MongoDB backup (creates compressed archive)
+/db-backup mongodb mydb localhost 27017
+```
+
+All commands work on both local and remote systems (when connected via SSH).
 
 ## Development 👨‍💻
 

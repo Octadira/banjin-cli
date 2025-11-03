@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.6.2] - 2025-11-03
+## [1.6.3] - 2025-11-03
 
 ### Added
 - **Session-based input history**: Added input history navigation with arrow keys (up/down) in line input mode. History is cleared at the start of each session for privacy and freshness.
@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Profile command help**: Removed misleading `[--light|--full]` options from `/profile collect` help text since it always performs comprehensive profiling.
+- **Help system**: Added all new commands to `/help` output with proper categorization.
+- **Documentation**: Added comprehensive examples and usage instructions for new commands in README.md.
 
 ## [1.6.0] - 2025-11-03
 
