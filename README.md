@@ -334,6 +334,91 @@ Banjin includes powerful sysadmin commands for file management, monitoring, cont
 
 All commands work on both local and remote systems (when connected via SSH).
 
+## Security Considerations 🔒
+
+**Important:** These advanced commands have significant security implications. Always understand the risks before use.
+
+### File Transfer Security
+- **✅ Encrypted:** Uses SCP over SSH for secure transfer
+- **⚠️ Path Risks:** Avoid relative paths that could overwrite system files
+- **🛡️ Best Practice:** Use absolute paths and verify destinations
+
+```bash
+# ✅ Safe usage
+/upload ./config/app.yaml /home/user/config/app.yaml
+/download /var/log/nginx/error.log ./server-logs.log
+
+# ❌ Dangerous - avoid these patterns
+/upload ../../../etc/passwd /tmp/backup  # Path traversal
+/download /etc/shadow ./passwords        # Sensitive data
+```
+
+### Monitoring Commands Security
+- **✅ Controlled:** Manual refresh (Enter) and cancellation (Ctrl+C)
+- **⚠️ Resource Usage:** Continuous monitoring can consume system resources
+- **⚠️ Data Exposure:** Log monitoring may reveal sensitive information
+- **🛡️ Best Practice:** Use reasonable intervals and monitor resource usage
+
+```bash
+# ✅ Safe monitoring
+/watch "ps aux | head -10" 5
+/tail /var/log/nginx/access.log 50
+
+# ❌ Resource intensive
+/watch "find / -name '*.log' 2>/dev/null" 1
+/tail /var/log/auth.log  # May expose authentication data
+```
+
+### Docker Management Security
+- **✅ Isolated:** Operations contained within Docker environment
+- **⚠️ Privilege Escalation:** Containers with `--privileged` flag bypass isolation
+- **⚠️ Host Access:** Mounted volumes can access host filesystem
+- **🛡️ Best Practice:** Use non-root containers and verify image sources
+
+```bash
+# ✅ Safe operations
+/docker ps
+/docker logs myapp
+/docker images
+
+# ⚠️ High risk in privileged containers
+/docker exec privileged-container "rm -rf /host/path"
+```
+
+### Database Backup Security
+- **✅ Encrypted Transfer:** SSH encryption for remote backups
+- **⚠️ Credential Exposure:** Passwords visible in command history
+- **⚠️ Large Data Sets:** Backups can consume significant disk space
+- **⚠️ Sensitive Data:** Backups contain potentially sensitive information
+- **🛡️ Best Practice:** Use interactive password prompts, verify storage space
+
+```bash
+# ✅ Safe backup (password prompted interactively)
+/db-backup mysql mydb root localhost
+
+# ❌ Avoid visible passwords
+/db-backup mysql mydb root mysecretpassword localhost
+
+# ✅ Check space before large backups
+# Run: df -h (check available space)
+# Run: ls -la ~/banjin-backups/ (check existing backups)
+```
+
+### General Security Guidelines
+1. **Test First:** Always test commands with non-critical data
+2. **Verify Permissions:** Ensure proper access rights before operations
+3. **Monitor Resources:** Watch system resources during long-running commands
+4. **Clean Up:** Remove temporary files and old backups after use
+5. **Use Secure Connections:** Always use SSH/VPN for remote access
+6. **Audit Actions:** Review logs after sensitive operations
+
+**Risk Level (1-10 scale):**
+- `/upload`/`/download`: 3/10 (Low with proper validation)
+- `/watch`: 4/10 (Depends on monitored command)
+- `/tail`: 5/10 (May expose sensitive logs)
+- `/docker`: 6/10 (Depends on container privileges)
+- `/db-backup`: 7/10 (Handles sensitive data)
+
 ## Development 👨‍💻
 
 If you want to contribute to the project:
