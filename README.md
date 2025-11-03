@@ -1,7 +1,5 @@
 # Banjin - The AI CLI Assistant for Developers & SysAdmins 🤖
 
-**⚠️ IMPORTANT: Do NOT push to GitHub without explicit permission from the project owner.**
-
 **Banjin** is a powerful, extensible AI command-line assistant designed for developers, system administrators, and power users. It acts as an intelligent agent that can operate on your local machine or connect to remote servers via SSH, allowing you to perform complex tasks using natural language.
 
 > *Banjin was crafted with the help of an AI assistant, making it an application by AI, for AI (and the humans who command them). 😉*
